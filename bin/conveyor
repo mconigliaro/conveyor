@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import os
+import string
+import sys
+import time
+
+if string.find(os.path.abspath(sys.argv[0]), os.sep+'conveyor') != -1:
+    sys.path.insert(0, os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]), os.pardir, os.pardir)))
+if hasattr(os, "getuid") and os.getuid() != 0:
+    sys.path.insert(0, os.path.abspath(os.getcwd()))
+
+import conveyor
+
+
+client = conveyor.Conveyor()
+while True:
+    time.sleep(1)
