@@ -6,7 +6,7 @@ except ImportError:
 setup(
   name = 'conveyor',
   version = '0.1.0',
-  description = 'Conveyor is an application deployment framework',
+  description = 'Conveyor is a simple continuous deployment framework',
   author = 'Michael T. Conigliaro',
   author_email = 'mike [at] conigliaro [dot] org',
   url = 'http://conigliaro.org',

@@ -1,46 +1,35 @@
 import conveyor
 
 
-controller = None
-
-clients = {}
-for i in range(1, 4):
-    clients[i] = {
-        'host_id': 'client%d' % i,
-        'groups': ['group%d' % (i % 2)],
-        'instance': None
-    }
-
-apps = {}
+client = None
+apps = []
+app_count = 3
 
 
 def setup():
-    global clients, controller
+    global client, apps, app_count
 
-    controller = conveyor.Conveyor(host_id='controller')
-    for id in clients:
-        clients[id]['instance'] = conveyor.Conveyor(host_id=clients[id]['host_id'], groups=clients[id]['groups'])
+    client = conveyor.Conveyor(host_id='test_client')
 
-def test_zkplus():
-    assert conveyor.zkplus.get_parent_node('/parent/child') == '/parent'
-
-    conveyor.zkplus.create_r(handle=controller.handle, path='/test_create_r/a/b/c', data='test data')
-
-    conveyor.zkplus.delete_r(handle=controller.handle, path='/test_create_r')
+    for i in range(app_count):
+        apps.append({
+            'id': 'test_app%d' % i,
+            'version': (i % 3),
+            'groups': ['test_group%d' % (i % 3)]
+        })
 
 def test_conveyor():
-    assert controller.get_path('apps') == '/apps'
-    assert controller.get_path('apps', 'test') == '/apps/test'
+    assert client.get_path('apps') == '/apps'
+    assert client.get_path('apps', 'test') == '/apps/test'
 
-    assert controller.zookeeper('exists', '/hosts') != None
+    for i in range(1):
+        for app in apps:
+            client.create_app(**app)
+            assert client.get_app(id=app['id']).__class__ == tuple
 
-    controller.create_app(name='test', version=1, groups='group1')
-    controller.create_app(name='test', version=2, groups='group1')
-    controller.create_app(name='test2', version=1, groups='group1')
+    assert len(client.get_apps()) == app_count
 
-    controller.get_app(name='test2')
+    assert len(client.list_apps()) == app_count
 
-    assert len(controller.list_apps()) > 0
-
-    controller.delete_app(name='test')
-    controller.delete_app(name='test2')
+    for app in apps:
+        client.delete_app(id=app['id'])
