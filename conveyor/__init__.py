@@ -30,7 +30,7 @@ class Conveyor(object):
 
         self.cv = threading.Condition()
         self.cv.acquire()
-        log.info('Connecting to ZooKeeper: %s' % servers)
+        log.info('Connecting to ZooKeeper: %s', servers)
         try:
             self.handle = zookeeper.init(servers, self.init_watcher, timeout * 1000)
             while self.conn_state != zookeeper.CONNECTED_STATE:
@@ -47,23 +47,23 @@ class Conveyor(object):
     def init_watcher(self, handle, type, state, path):
         """Handle connection state changes"""
 
-        log.debug('Connection state changed: %s => %s' % (self.conn_state, state))
+        log.debug('Connection state changed: %s => %s', self.conn_state, state)
         self.conn_state = state
 
         if state == zookeeper.CONNECTED_STATE:
             try:
                 self.cv.acquire()
-                log.info('Connected with session ID: %x' % zookeeper.client_id(handle)[0])
+                log.info('Connected with session ID: %x', zookeeper.client_id(handle)[0])
 
                 path = self.get_path('hosts', self.host_info['id'])
                 while True:
                     try:
                         zookeeper.create(self.handle, path, json.dumps(self.host_info['data']), [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.EPHEMERAL)
-                        log.info('Created ephemeral host node: %s (%s)' % (path, self.host_info['data']))
+                        log.info('Created ephemeral host node: %s (%s)', path, self.host_info['data'])
                         break
                     except zookeeper.NodeExistsException:
                         zookeeper.set(self.handle, path, json.dumps(self.host_info['data']))
-                        log.info('Updated ephemeral node: %s (%s)' % (path, self.host_info['data']))
+                        log.info('Updated ephemeral node: %s (%s)', path, self.host_info['data'])
                         break
                     except zookeeper.NoNodeException:
                         zookeeper.create_r(self.handle, zookeeper.get_parent_node(path), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
@@ -72,7 +72,7 @@ class Conveyor(object):
                     while True:
                         try:
                             self.app_handler.fixme(self.get_apps())
-                            log.info('Watching applications at: %s ' % self.get_path('apps'))
+                            log.info('Watching applications at: %s', self.get_path('apps'))
                             break
                         except zookeeper.NoNodeException:
                             zookeeper.create_r(self.handle, self.get_path('apps'), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
@@ -104,11 +104,11 @@ class Conveyor(object):
         while True:
             try:
                 zookeeper.create(self.handle, path, json.dumps(data), [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
-                log.info('Created app: %s (%s)' % (id, data))
+                log.info('Created app: %s (%s)', id, data)
                 break
             except zookeeper.NodeExistsException:
                 zookeeper.set(self.handle, path, json.dumps(data))
-                log.info('Updated app: %s (%s)' % (id, data))
+                log.info('Updated app: %s (%s)', id, data)
                 break
             except zookeeper.NoNodeException:
                 zookeeper.create_r(self.handle, zookeeper.get_parent_node(path), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
@@ -117,7 +117,7 @@ class Conveyor(object):
         """Return an application node"""
 
         result = zookeeper.get(self.handle, '%s' % self.get_path('apps', id))
-        log.debug('Got app: %s (%s)' % (id, result))
+        log.debug('Got app: %s (%s)', id, result)
         return result
 
     def get_apps(self):
@@ -131,18 +131,18 @@ class Conveyor(object):
     def apps_watcher(self, handle, type, state, path):
         """Handle application state changes"""
 
-        log.debug('Application state changed: %s' % (state))
+        log.debug('Application state changed: %s', state)
         self.app_handler.fixme(self.get_apps())
 
     def list_apps(self):
         """Return a sorted list of application nodes"""
 
         result = sorted(zookeeper.get_children(self.handle, self.get_path('apps')))
-        log.debug('Listing apps: %s ' % (', '.join(result)))
+        log.debug('Listing apps: %s ', ', '.join(result))
         return result
 
     def delete_app(self, id):
         """Delete an application node"""
 
-        log.info('Deleting app: %s' % (id))
+        log.info('Deleting app: %s', id)
         zookeeper.delete(self.handle, '%s' % self.get_path('apps', id))
