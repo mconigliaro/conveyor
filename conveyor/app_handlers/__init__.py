@@ -1,15 +1,14 @@
 from __future__ import absolute_import
 
-import conveyor
+from ..logging import log
 
 
 class Default():
 
-    def __init__(self, groups=list()):
-        self.groups = groups
+    def __init__(self, conveyor):
+        self.conveyor = conveyor
+        log.debug('Initialized app handler')
 
-        conveyor.log.critical('###### FIXME: init ######')
-
-    def fixme(self, data):
-        conveyor.log.critical('###### FIXME: do something ######')
-        conveyor.log.critical(data)
+    def run(self, data):
+        log.critical('###### FIXME: do something ######')
+        log.critical(data)

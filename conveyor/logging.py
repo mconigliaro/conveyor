@@ -9,25 +9,7 @@ from .options import options
 log = logging.getLogger()
 
 # set log level
-if options.log_level != None:
-    options.log_level = options.log_level.upper()
-    if options.log_level.startswith('C'):
-        options.log_level = 'CRITICAL'
-        log.setLevel(logging.CRITICAL)
-    elif options.log_level.startswith('E'):
-        options.log_level = 'ERROR'
-        log.setLevel(logging.ERROR)
-    elif options.log_level.startswith('W'):
-        options.log_level = 'WARNING'
-        log.setLevel(logging.WARNING)
-    elif options.log_level.startswith('I'):
-        options.log_level = 'INFO'
-        log.setLevel(logging.INFO)
-    elif options.log_level.startswith('D'):
-        options.log_level = 'DEBUG'
-        log.setLevel(logging.DEBUG)
-else:
-    log.setLevel(logging.NOTSET)
+log.setLevel(getattr(logging, options.log_level.upper()))
 
 # set log format
 log_format = logging.Formatter("%(asctime)s:%(process)d:%(levelname)s@%(funcName)s@%(lineno)d: %(message)s")

@@ -7,9 +7,10 @@ import time
 import threading
 
 from . import app_handlers
+from .logging import log
+from . import node_types
 from .options import options, args
 from . import zookeeper
-from .logging import log
 
 
 class Conveyor(object):
@@ -21,12 +22,13 @@ class Conveyor(object):
         self.host_info = {
             'id': host_id,
             'data': {
-                'groups': [groups]
+                'groups': list(groups)
             }
         }
-        self.app_handler = app_handler(groups=groups)
+        self.app_handler = app_handler(self)
 
         self.conn_state = None
+        self.handle = None
 
         self.cv = threading.Condition()
         self.cv.acquire()
@@ -55,7 +57,7 @@ class Conveyor(object):
                 self.cv.acquire()
                 log.info('Connected with session ID: %x', zookeeper.client_id(handle)[0])
 
-                path = self.get_path('hosts', self.host_info['id'])
+                path = node_types.get_path('hosts', self.host_info['id'])
                 while True:
                     try:
                         zookeeper.create(self.handle, path, json.dumps(self.host_info['data']), [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.EPHEMERAL)
@@ -72,10 +74,10 @@ class Conveyor(object):
                     while True:
                         try:
                             self.call_app_handler()
-                            log.info('Watching applications at: %s', self.get_path('apps'))
+                            log.info('Watching applications at: %s', node_types.get_path('apps'))
                             break
                         except zookeeper.NoNodeException:
-                            zookeeper.create_r(self.handle, self.get_path('apps'), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
+                            zookeeper.create_r(self.handle, node_types.get_path('apps'), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
 
             except Exception, e:
                 log.exception(e)
@@ -84,19 +86,11 @@ class Conveyor(object):
                 self.cv.notify()
                 self.cv.release()
 
-    def get_path(self, type, id=''):
-        """Return the absolute path for the specified type/id"""
 
-        if id != '':
-            result = zookeeper.ZK_PATH_SEP + zookeeper.ZK_PATH_SEP.join([type, id])
-        else:
-            result = zookeeper.ZK_PATH_SEP + type
-        return result
-
-    def create_app(self, id, version='', groups=list()):
+    def create_app(self, id, version='', groups=set()):
         """Create an application node"""
 
-        path = self.get_path('apps', id)
+        path = node_types.get_path('apps', id)
         data = {
             'version': version,
             'groups': groups
@@ -116,24 +110,22 @@ class Conveyor(object):
     def get_app(self, id):
         """Return an application node"""
 
-        app = dict()
-        app_tuple = zookeeper.get(self.handle, '%s' % self.get_path('apps', id))
-        app['data'] = json.loads(app_tuple[0])
-        app.update(app_tuple[1])
-        log.debug('Got app: %s', app)
+        app_tuple = zookeeper.get(self.handle, '%s' % node_types.get_path('apps', id))
+        log.debug('Got app: %s %s', id, app_tuple)
+        app = node_types.Application(app_tuple)
         return app
 
-    def get_apps(self, groups=list()):
+    def get_apps(self, groups=set()):
         """Return all application nodes. If groups are specified, only return apps in the specified groups."""
 
         apps = dict()
-        for app_id in zookeeper.get_children(self.handle, self.get_path('apps'), self.apps_watcher):
+        for app_id in zookeeper.get_children(self.handle, node_types.get_path('apps'), self.apps_watcher):
             app = self.get_app(app_id)
             if len(groups) > 0:
-                if set(groups) & set(app['data']['groups']):
+                if app.in_groups(groups):
                     apps[app_id] = app
                 else:
-                    log.debug('Application is not in my group (ignoring): %s', app_id)
+                    log.debug('Application is not in my group(s) (ignoring): %s', app_id)
             else:
                 apps[app_id] = app
         return apps
@@ -149,13 +141,13 @@ class Conveyor(object):
 
         apps = self.get_apps(groups=self.host_info['data']['groups'])
         if len(apps) > 0:
-            log.debug('Calling app_handler: %s', self.app_handler.__class__)
-            self.app_handler.fixme(apps)
+            log.debug('Calling run() method on app_handler: %s', self.app_handler.__class__)
+            self.app_handler.run(apps)
 
     def list_apps(self):
         """Return a sorted list of application nodes"""
 
-        result = sorted(zookeeper.get_children(self.handle, self.get_path('apps')))
+        result = sorted(zookeeper.get_children(self.handle, node_types.get_path('apps')))
         log.debug('Listing apps: %s ', ', '.join(result))
         return result
 
@@ -163,4 +155,4 @@ class Conveyor(object):
         """Delete an application node"""
 
         log.info('Deleting app: %s', id)
-        zookeeper.delete(self.handle, '%s' % self.get_path('apps', id))
+        zookeeper.delete(self.handle, '%s' % node_types.get_path('apps', id))
