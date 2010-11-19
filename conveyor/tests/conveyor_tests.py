@@ -2,7 +2,7 @@ import conveyor
 
 
 client = None
-apps = []
+apps = list()
 app_count = 3
 
 

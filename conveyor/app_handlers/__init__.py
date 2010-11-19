@@ -5,7 +5,7 @@ import conveyor
 
 class Default():
 
-    def __init__(self, groups=[]):
+    def __init__(self, groups=list()):
         self.groups = groups
 
         conveyor.log.critical('###### FIXME: init ######')

@@ -21,7 +21,7 @@ class Conveyor(object):
         self.host_info = {
             'id': host_id,
             'data': {
-                'groups': groups
+                'groups': [groups]
             }
         }
         self.app_handler = app_handler(groups=groups)
@@ -71,7 +71,7 @@ class Conveyor(object):
                 if self.app_handler != None:
                     while True:
                         try:
-                            self.app_handler.fixme(self.get_apps())
+                            self.call_app_handler()
                             log.info('Watching applications at: %s', self.get_path('apps'))
                             break
                         except zookeeper.NoNodeException:
@@ -88,12 +88,12 @@ class Conveyor(object):
         """Return the absolute path for the specified type/id"""
 
         if id != '':
-            result = '%s%s' % (zookeeper.ZK_PATH_SEP, zookeeper.ZK_PATH_SEP.join([type, id]))
+            result = zookeeper.ZK_PATH_SEP + zookeeper.ZK_PATH_SEP.join([type, id])
         else:
-            result = '%s%s' % (zookeeper.ZK_PATH_SEP, type)
+            result = zookeeper.ZK_PATH_SEP + type
         return result
 
-    def create_app(self, id, version='', groups=[]):
+    def create_app(self, id, version='', groups=list()):
         """Create an application node"""
 
         path = self.get_path('apps', id)
@@ -116,23 +116,41 @@ class Conveyor(object):
     def get_app(self, id):
         """Return an application node"""
 
-        result = zookeeper.get(self.handle, '%s' % self.get_path('apps', id))
-        log.debug('Got app: %s (%s)', id, result)
-        return result
+        app = dict()
+        app_tuple = zookeeper.get(self.handle, '%s' % self.get_path('apps', id))
+        app['data'] = json.loads(app_tuple[0])
+        app.update(app_tuple[1])
+        log.debug('Got app: %s', app)
+        return app
 
-    def get_apps(self):
-        """Return all application nodes"""
+    def get_apps(self, groups=list()):
+        """Return all application nodes. If groups are specified, only return apps in the specified groups."""
 
-        apps = {}
-        for app in zookeeper.get_children(self.handle, self.get_path('apps'), self.apps_watcher):
-            apps[app] = self.get_app(app)
+        apps = dict()
+        for app_id in zookeeper.get_children(self.handle, self.get_path('apps'), self.apps_watcher):
+            app = self.get_app(app_id)
+            if len(groups) > 0:
+                if set(groups) & set(app['data']['groups']):
+                    apps[app_id] = app
+                else:
+                    log.debug('Application is not in my group (ignoring): %s', app_id)
+            else:
+                apps[app_id] = app
         return apps
 
     def apps_watcher(self, handle, type, state, path):
         """Handle application state changes"""
 
         log.debug('Application state changed: %s', state)
-        self.app_handler.fixme(self.get_apps())
+        self.call_app_handler()
+
+    def call_app_handler(self):
+        """Call app handler as necessary"""
+
+        apps = self.get_apps(groups=self.host_info['data']['groups'])
+        if len(apps) > 0:
+            log.debug('Calling app_handler: %s', self.app_handler.__class__)
+            self.app_handler.fixme(apps)
 
     def list_apps(self):
         """Return a sorted list of application nodes"""

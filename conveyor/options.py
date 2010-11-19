@@ -45,7 +45,7 @@ op.add_option_group(og_log)
 op.set_defaults(servers = 'localhost:2181/conveyor',
                 timeout = 10,
                 host_id = socket.getfqdn(),
-                groups = [],
+                groups = list(),
                 log_level = 'info',
                 log_file_rotate_interval_type = 'd',
                 log_file_rotate_interval = 7,
