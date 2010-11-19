@@ -19,12 +19,7 @@ class Conveyor(object):
     def __init__(self, servers=options.servers, timeout=options.timeout, host_id=options.host_id, groups=options.groups, app_handler=app_handlers.Default):
         """Connect to a ZooKeeper ensamble"""
 
-        self.host_info = {
-            'id': host_id,
-            'data': {
-                'groups': list(groups)
-            }
-        }
+        self.host_info = node_types.Host(id=host_id, groups=groups)
         self.app_handler = app_handler(self)
 
         self.conn_state = None
@@ -57,15 +52,15 @@ class Conveyor(object):
                 self.cv.acquire()
                 log.info('Connected with session ID: %x', zookeeper.client_id(handle)[0])
 
-                path = node_types.get_path('hosts', self.host_info['id'])
+                path = node_types.get_path('hosts', self.host_info.id)
                 while True:
                     try:
-                        zookeeper.create(self.handle, path, json.dumps(self.host_info['data']), [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.EPHEMERAL)
-                        log.info('Created ephemeral host node: %s (%s)', path, self.host_info['data'])
+                        zookeeper.create(self.handle, path, json.dumps(self.host_info.data), [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.EPHEMERAL)
+                        log.info('Created ephemeral host node: %s (%s)', path, self.host_info.data)
                         break
                     except zookeeper.NodeExistsException:
-                        zookeeper.set(self.handle, path, json.dumps(self.host_info['data']))
-                        log.info('Updated ephemeral node: %s (%s)', path, self.host_info['data'])
+                        zookeeper.set(self.handle, path, json.dumps(self.host_info.data))
+                        log.info('Updated ephemeral node: %s (%s)', path, self.host_info.data)
                         break
                     except zookeeper.NoNodeException:
                         zookeeper.create_r(self.handle, zookeeper.get_parent_node(path), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
@@ -74,7 +69,7 @@ class Conveyor(object):
                     while True:
                         try:
                             self.call_app_handler()
-                            log.info('Watching applications at: %s', node_types.get_path('apps'))
+                            log.info('Watching for application changes at: %s', node_types.get_path('apps'))
                             break
                         except zookeeper.NoNodeException:
                             zookeeper.create_r(self.handle, node_types.get_path('apps'), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
@@ -85,7 +80,6 @@ class Conveyor(object):
             finally:
                 self.cv.notify()
                 self.cv.release()
-
 
     def create_app(self, id, version='', groups=set()):
         """Create an application node"""
@@ -112,7 +106,7 @@ class Conveyor(object):
 
         app_tuple = zookeeper.get(self.handle, '%s' % node_types.get_path('apps', id))
         log.debug('Got app: %s %s', id, app_tuple)
-        app = node_types.Application(app_tuple)
+        app = node_types.Application(id=id, init_tuple=app_tuple)
         return app
 
     def get_apps(self, groups=set()):
@@ -139,7 +133,7 @@ class Conveyor(object):
     def call_app_handler(self):
         """Call app handler as necessary"""
 
-        apps = self.get_apps(groups=self.host_info['data']['groups'])
+        apps = self.get_apps(groups=self.host_info.data['groups'])
         if len(apps) > 0:
             log.debug('Calling run() method on app_handler: %s', self.app_handler.__class__)
             self.app_handler.run(apps)

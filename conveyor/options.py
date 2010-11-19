@@ -49,7 +49,7 @@ op.add_option_group(og_log)
 op.set_defaults(servers = 'localhost:2181/conveyor',
                 timeout = 10,
                 host_id = socket.getfqdn(),
-                groups = '',
+                groups = [],
                 log_level = 'info',
                 log_file_rotate_interval_type = 'd',
                 log_file_rotate_interval = 7,
@@ -57,4 +57,8 @@ op.set_defaults(servers = 'localhost:2181/conveyor',
 
 (options, args) = op.parse_args()
 
-options.groups = set(options.groups.split(','))
+if len(options.groups) > 0:
+    groups = list()
+    for group in options.groups.split(','):
+        groups.append(group.strip())
+    options.groups = list(set(groups)) # uniquify

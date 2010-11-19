@@ -11,6 +11,7 @@ def setup():
 
     client = conveyor.Conveyor(host_id='test_client', groups=['test_group0'])
 
+    conveyor.zookeeper.delete_r(handle=client.handle, path='/apps')
     for i in range(app_count):
         apps.append({
             'id': 'test_app%d' % i,
@@ -25,7 +26,7 @@ def test_conveyor():
     for i in range(1):
         for app in apps:
             client.create_app(**app)
-            assert client.get_app(id=app['id']).__class__ == conveyor.node_types.Application
+            assert client.get_app(id=app['id']).id == app['id']
 
     assert len(client.get_apps()) == app_count
 

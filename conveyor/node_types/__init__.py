@@ -9,17 +9,19 @@ from .. import zookeeper
 class Node(object):
     """Base class for all nodes"""
 
-    def __init__(self, node_tuple):
+    def __init__(self, id, type, init_tuple=tuple()):
         """Create attributes from tuple data"""
 
-        try:
-            self.data = json.loads(node_tuple[0])
-        except TypeError:
-            log.error('Unable to unserialize JSON: %s', node_tuple[0])
-            self.data = dict()
+        self.id = id
+        self.path = get_path(type, id)
 
-        for name,value in node_tuple[1].items():
-           setattr(self, name, value)
+        if len(init_tuple) > 0:
+            try:
+                self.data.update(json.loads(init_tuple[0]))
+            except:
+                log.error('Unable to unserialize JSON in %s: %s', self.path, init_tuple[0])
+            for name,value in init_tuple[1].items():
+               setattr(self, name, value)
 
     def in_groups(self, groups=set()):
         """Return true if the node belongs to any of the specified groups"""
@@ -33,15 +35,30 @@ class Node(object):
 class Host(Node):
     """Host node class"""
 
-    def __init__(self, node_tuple):
-        super(HostNode, self).__init__(node_tuple)
+    def __init__(self, id, groups=list(), init_tuple=tuple()):
+        self.data = {
+            'groups': groups
+        }
+        super(Host, self).__init__(id=id, type='hosts', init_tuple=init_tuple)
 
 
 class Application(Node):
     """Application node class"""
 
-    def __init__(self, node_tuple):
-        super(Application, self).__init__(node_tuple)
+    def __init__(self, id, groups=list(), version=0, init_tuple=tuple()):
+        self.data = {
+            'groups': groups,
+            'version': version
+        }
+        super(Application, self).__init__(id=id, type='apps', init_tuple=init_tuple)
+
+    def version_greater_than(self, version='0'):
+        """Return true if the application's version is greater than the given version"""
+
+        result = False
+        if self.data['version'] > version:
+            result = True
+        return result
 
 
 def get_path(type, id=''):
