@@ -28,6 +28,9 @@ def test_conveyor():
             client.create_app(**app)
             assert client.get_app(id=app['id']).id == app['id']
 
+    assert client.get_app(id='test_app0').in_groups(['test_group0'])
+    assert not client.get_app(id='test_app0').in_groups(['test_group1'])
+
     assert client.get_app(id='test_app2').version_greater_than(1)
     assert not client.get_app(id='test_app2').version_greater_than(3)
 
