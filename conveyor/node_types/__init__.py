@@ -60,15 +60,6 @@ class Node(object):
         return self(id=id, init_tuple=node_tuple)
 
     @classmethod
-    def delete(self, handle, id):
-        """Delete a node from ZooKeeper"""
-
-        path = self.get_path(id=id)
-
-        log.debug('Deleting instance of %s: %s', self, path)
-        return zookeeper.delete(handle, path)
-
-    @classmethod
     def read_all(self, handle, groups=set(), watcher=None):
         """Return all nodes of the specified type. If groups are specified, only return nodes in the specified groups."""
 
@@ -76,14 +67,21 @@ class Node(object):
         path = self.get_path()
         for id in zookeeper.get_children(handle,path, watcher):
             node = self.read(handle=handle, id=id)
-            if len(groups) > 0:
-                if node.in_groups(groups):
-                    nodes[id] = node
-                else:
-                    log.debug('Node is not in my group(s) (ignoring): %s', id)
-            else:
+            if node.in_groups(groups):
                 nodes[id] = node
+            else:
+                log.debug('Node is not in my group(s) (ignoring): %s', id)
+
         return nodes
+
+    @classmethod
+    def delete(self, handle, id):
+        """Delete a node from ZooKeeper"""
+
+        path = self.get_path(id=id)
+
+        log.debug('Deleting instance of %s: %s', self, path)
+        return zookeeper.delete(handle, path)
 
     def write(self, handle):
         """Create a node in ZooKeeper"""
