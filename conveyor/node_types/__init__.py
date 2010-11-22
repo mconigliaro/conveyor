@@ -24,7 +24,7 @@ class Node(object):
                setattr(self, name, value)
 
     def write(self, handle):
-        """Create node"""
+        """Create a node in ZooKeeper"""
 
         path = get_path(self.__class__, self.id)
         if self.__class__ in [Host]:
@@ -94,3 +94,50 @@ def get_path(type, id=''):
     else:
         result = root
     return result
+
+
+def list_nodes(handle, type):
+    """Return a sorted list of nodes of the specified type"""
+
+    path = get_path(type)
+
+    result = sorted(zookeeper.get_children(handle, path))
+    log.debug('Listing nodes of type %s: %s ', type, ', '.join(result))
+    return result
+
+
+def read_node(handle, type, id):
+    """Read a node from ZooKeeper"""
+
+    path = get_path(type, id)
+
+    node_tuple = zookeeper.get(handle, path)
+    log.debug('Read instance of %s: %s (%s)', type, path, node_tuple)
+
+    return type(id=id, init_tuple=node_tuple)
+
+
+def read_nodes(handle, type, groups=set(), watcher=None):
+    """Return all nodes of the specified type. If groups are specified, only return nodes in the specified groups."""
+
+    nodes = dict()
+    path = get_path(type)
+    for id in zookeeper.get_children(handle,path, watcher):
+        node = read_node(handle=handle, type=type, id=id)
+        if len(groups) > 0:
+            if node.in_groups(groups):
+                nodes[id] = node
+            else:
+                log.debug('Node is not in my group(s) (ignoring): %s', id)
+        else:
+            nodes[id] = node
+    return nodes
+
+
+def delete_node(handle, type, id):
+    """Delete a node from ZooKeeper"""
+
+    path = get_path(type, id)
+
+    log.debug('Deleting instance of %s: %s', type, path)
+    return zookeeper.delete(handle, path)

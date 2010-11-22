@@ -22,17 +22,19 @@ def test_conveyor():
     for i in range(1):
         for app in apps:
             app.write(client.handle)
-            assert client.get_app(id=app.id).id == app.id
+            assert conveyor.node_types.read_node(handle=client.handle, type=conveyor.node_types.Application, id=app.id).id == app.id
 
-    assert client.get_app(id='test_app0').in_groups(['test_group0'])
-    assert not client.get_app(id='test_app0').in_groups(['test_group1'])
+    assert conveyor.node_types.read_node(handle=client.handle, type=conveyor.node_types.Application, id='test_app0').in_groups(['test_group0'])
+    assert not conveyor.node_types.read_node(handle=client.handle, type=conveyor.node_types.Application, id='test_app0').in_groups(['test_group1'])
 
-    assert client.get_app(id='test_app2').version_greater_than(1)
-    assert not client.get_app(id='test_app2').version_greater_than(3)
+    assert conveyor.node_types.read_node(handle=client.handle, type=conveyor.node_types.Application, id='test_app2').version_greater_than(1)
+    assert not conveyor.node_types.read_node(handle=client.handle, type=conveyor.node_types.Application, id='test_app2').version_greater_than(3)
 
-    assert len(client.get_apps()) == app_count
+    assert len(conveyor.node_types.read_nodes(handle=client.handle, type=conveyor.node_types.Host)) == 1
+    assert len(conveyor.node_types.read_nodes(handle=client.handle, type=conveyor.node_types.Application)) == app_count
 
-    assert len(client.list_apps()) == app_count
+    assert len(conveyor.node_types.list_nodes(handle=client.handle, type=conveyor.node_types.Host)) == 1
+    assert len(conveyor.node_types.list_nodes(handle=client.handle, type=conveyor.node_types.Application)) == app_count
 
     for app in apps:
-        client.delete_app(id=app.id)
+        conveyor.node_types.delete_node(handle=client.handle, type=conveyor.node_types.Application, id=app.id)

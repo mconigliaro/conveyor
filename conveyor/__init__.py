@@ -58,7 +58,6 @@ class Conveyor(object):
                     while True:
                         try:
                             self.call_app_handler()
-                            log.info('Watching for application changes at: %s', node_types.get_path(node_types.Application))
                             break
                         except zookeeper.NoNodeException:
                             zookeeper.create_r(self.handle, node_types.get_path(node_types.Application), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
@@ -70,52 +69,16 @@ class Conveyor(object):
                 self.cv.notify()
                 self.cv.release()
 
-    def get_app(self, id):
-        """Return an application node"""
+    def call_app_handler(self):
+        """Call app handler as necessary"""
 
-        app_tuple = zookeeper.get(self.handle, '%s' % node_types.get_path(node_types.Application, id))
-        log.debug('Got app: %s %s', id, app_tuple)
-        app = node_types.Application(id=id, init_tuple=app_tuple)
-        return app
-
-    def get_apps(self, groups=set()):
-        """Return all application nodes. If groups are specified, only return apps in the specified groups."""
-
-        apps = dict()
-        for app_id in zookeeper.get_children(self.handle, node_types.get_path(node_types.Application), self.apps_watcher):
-            app = self.get_app(app_id)
-            if len(groups) > 0:
-                if app.in_groups(groups):
-                    apps[app_id] = app
-                else:
-                    log.debug('Application is not in my group(s) (ignoring): %s', app_id)
-            else:
-                apps[app_id] = app
-        return apps
+        apps = node_types.read_nodes(handle=self.handle, type=node_types.Application, groups=self.host_info.data['groups'], watcher=self.apps_watcher)
+        if len(apps) > 0:
+            log.debug('Calling run() method on app_handler: %s', self.app_handler.__class__)
+            self.app_handler.run(apps)
 
     def apps_watcher(self, handle, type, state, path):
         """Handle application state changes"""
 
         log.debug('Application state changed: %s', state)
         self.call_app_handler()
-
-    def call_app_handler(self):
-        """Call app handler as necessary"""
-
-        apps = self.get_apps(groups=self.host_info.data['groups'])
-        if len(apps) > 0:
-            log.debug('Calling run() method on app_handler: %s', self.app_handler.__class__)
-            self.app_handler.run(apps)
-
-    def list_apps(self):
-        """Return a sorted list of application nodes"""
-
-        result = sorted(zookeeper.get_children(self.handle, node_types.get_path(node_types.Application)))
-        log.debug('Listing apps: %s ', ', '.join(result))
-        return result
-
-    def delete_app(self, id):
-        """Delete an application node"""
-
-        log.info('Deleting app: %s', id)
-        zookeeper.delete(self.handle, '%s' % node_types.get_path(node_types.Application, id))
