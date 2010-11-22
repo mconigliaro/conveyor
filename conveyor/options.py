@@ -19,7 +19,7 @@ og_sess.add_option('--host-id',
                    help="host id (default: %default)")
 og_sess.add_option('--groups',
                    dest='groups',
-                   help="groups")
+                   help="comma-separated list of groups")
 op.add_option_group(og_sess)
 
 og_log = optparse.OptionGroup(op, 'Output and Logging Options')
@@ -61,4 +61,4 @@ if len(options.groups) > 0:
     groups = list()
     for group in options.groups.split(','):
         groups.append(group.strip())
-    options.groups = list(set(groups)) # uniquify
+    options.groups = list(set(groups)) # remove duplicate groups

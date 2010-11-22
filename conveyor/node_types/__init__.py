@@ -9,11 +9,11 @@ from .. import zookeeper
 class Node(object):
     """Base class for all nodes"""
 
-    def __init__(self, id, type, init_tuple=tuple()):
+    def __init__(self, id, init_tuple=tuple()):
         """Create attributes from tuple data"""
 
         self.id = id
-        self.path = get_path(type, id)
+        self.path = get_path(self.__class__, id)
 
         if len(init_tuple) > 0:
             try:
@@ -22,6 +22,26 @@ class Node(object):
                 log.error('Unable to unserialize JSON in %s: %s', self.path, init_tuple[0])
             for name,value in init_tuple[1].items():
                setattr(self, name, value)
+
+    def write(self, handle):
+        """Create node"""
+
+        path = get_path(self.__class__, self.id)
+        if self.__class__ in [Host]:
+            create_flag = zookeeper.EPHEMERAL
+        else:
+            create_flag = zookeeper.ZOO_PERSISTENT
+
+        while True:
+            try:
+                zookeeper.create(handle, path, json.dumps(self.data), [zookeeper.ZOO_OPEN_ACL_UNSAFE], create_flag)
+                log.info('Wrote instance of %s: %s (%s)', self.__class__, path, self.data)
+                break
+            except zookeeper.NodeExistsException:
+                zookeeper.delete(handle, path)
+                log.info('Deleted old instance of %s: %s', self.__class__, path)
+            except zookeeper.NoNodeException:
+                zookeeper.create_r(handle, zookeeper.get_parent_node(path), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
 
     def in_groups(self, groups=set()):
         """Return true if the node belongs to any of the specified groups"""
@@ -39,18 +59,18 @@ class Host(Node):
         self.data = {
             'groups': groups
         }
-        super(Host, self).__init__(id=id, type='hosts', init_tuple=init_tuple)
+        super(self.__class__, self).__init__(id=id, init_tuple=init_tuple)
 
 
 class Application(Node):
     """Application node class"""
 
-    def __init__(self, id, groups=list(), version=0, init_tuple=tuple()):
+    def __init__(self, id, groups=list(), version='0', init_tuple=tuple()):
         self.data = {
             'groups': groups,
             'version': version
         }
-        super(Application, self).__init__(id=id, type='apps', init_tuple=init_tuple)
+        super(self.__class__, self).__init__(id=id, init_tuple=init_tuple)
 
     def version_greater_than(self, version='0'):
         """Return true if the application's version is greater than the given version"""
@@ -64,8 +84,13 @@ class Application(Node):
 def get_path(type, id=''):
     """Return the absolute path for the specified type/id"""
 
+    if type == Application:
+        root = zookeeper.ZK_PATH_SEP + 'apps'
+    elif type == Host:
+        root = zookeeper.ZK_PATH_SEP + 'hosts'
+
     if id != '':
-        result = zookeeper.ZK_PATH_SEP + zookeeper.ZK_PATH_SEP.join([type, id])
+        result = root + zookeeper.ZK_PATH_SEP + id
     else:
-        result = zookeeper.ZK_PATH_SEP + type
+        result = root
     return result
