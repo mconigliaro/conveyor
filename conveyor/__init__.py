@@ -60,7 +60,7 @@ class Conveyor(object):
                             self.call_app_handler()
                             break
                         except zookeeper.NoNodeException:
-                            zookeeper.create_r(self.handle, node_types.get_path(node_types.Application), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
+                            zookeeper.create_r(self.handle, node_types.Application.get_path(), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
 
             except Exception, e:
                 log.exception(e)
@@ -72,10 +72,9 @@ class Conveyor(object):
     def call_app_handler(self):
         """Call app handler as necessary"""
 
-        apps = node_types.read_nodes(handle=self.handle, type=node_types.Application, groups=self.host_info.data['groups'], watcher=self.apps_watcher)
-        if len(apps) > 0:
-            log.debug('Calling run() method on app_handler: %s', self.app_handler.__class__)
-            self.app_handler.run(apps)
+        apps = node_types.Application.read_all(handle=self.handle, groups=self.host_info.data['groups'], watcher=self.apps_watcher)
+        log.debug('Calling run() method on app_handler: %s', self.app_handler.__class__)
+        self.app_handler.run(apps)
 
     def apps_watcher(self, handle, type, state, path):
         """Handle application state changes"""

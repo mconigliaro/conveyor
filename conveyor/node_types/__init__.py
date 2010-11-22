@@ -13,7 +13,7 @@ class Node(object):
         """Create attributes from tuple data"""
 
         self.id = id
-        self.path = get_path(self.__class__, id)
+        self.path = self.__class__.get_path(id=id)
 
         if len(init_tuple) > 0:
             try:
@@ -23,10 +23,72 @@ class Node(object):
             for name,value in init_tuple[1].items():
                setattr(self, name, value)
 
+    @classmethod
+    def get_path(self, id=''):
+        """Return the absolute path for the specified type/id"""
+
+        if self == Application:
+            root = zookeeper.ZK_PATH_SEP + 'apps'
+        elif self == Host:
+            root = zookeeper.ZK_PATH_SEP + 'hosts'
+
+        if id != '':
+            result = root + zookeeper.ZK_PATH_SEP + id
+        else:
+            result = root
+        return result
+
+    @classmethod
+    def list(self, handle):
+        """Return a sorted list of nodes of the specified type"""
+
+        path = self.get_path()
+
+        result = sorted(zookeeper.get_children(handle, path))
+        log.debug('Listing nodes of type %s: %s ', self, ', '.join(result))
+        return result
+
+    @classmethod
+    def read(self, handle, id):
+        """Read a node from ZooKeeper"""
+
+        path = self.get_path(id=id)
+
+        node_tuple = zookeeper.get(handle, path)
+        log.debug('Read instance of %s: %s (%s)', self, path, node_tuple)
+
+        return self(id=id, init_tuple=node_tuple)
+
+    @classmethod
+    def delete(self, handle, id):
+        """Delete a node from ZooKeeper"""
+
+        path = self.get_path(id=id)
+
+        log.debug('Deleting instance of %s: %s', self, path)
+        return zookeeper.delete(handle, path)
+
+    @classmethod
+    def read_all(self, handle, groups=set(), watcher=None):
+        """Return all nodes of the specified type. If groups are specified, only return nodes in the specified groups."""
+
+        nodes = dict()
+        path = self.get_path()
+        for id in zookeeper.get_children(handle,path, watcher):
+            node = self.read(handle=handle, id=id)
+            if len(groups) > 0:
+                if node.in_groups(groups):
+                    nodes[id] = node
+                else:
+                    log.debug('Node is not in my group(s) (ignoring): %s', id)
+            else:
+                nodes[id] = node
+        return nodes
+
     def write(self, handle):
         """Create a node in ZooKeeper"""
 
-        path = get_path(self.__class__, self.id)
+        path = self.__class__.get_path(id=self.id)
         if self.__class__ in [Host]:
             create_flag = zookeeper.EPHEMERAL
         else:
@@ -79,65 +141,3 @@ class Application(Node):
         if self.data['version'] > version:
             result = True
         return result
-
-
-def get_path(type, id=''):
-    """Return the absolute path for the specified type/id"""
-
-    if type == Application:
-        root = zookeeper.ZK_PATH_SEP + 'apps'
-    elif type == Host:
-        root = zookeeper.ZK_PATH_SEP + 'hosts'
-
-    if id != '':
-        result = root + zookeeper.ZK_PATH_SEP + id
-    else:
-        result = root
-    return result
-
-
-def list_nodes(handle, type):
-    """Return a sorted list of nodes of the specified type"""
-
-    path = get_path(type)
-
-    result = sorted(zookeeper.get_children(handle, path))
-    log.debug('Listing nodes of type %s: %s ', type, ', '.join(result))
-    return result
-
-
-def read_node(handle, type, id):
-    """Read a node from ZooKeeper"""
-
-    path = get_path(type, id)
-
-    node_tuple = zookeeper.get(handle, path)
-    log.debug('Read instance of %s: %s (%s)', type, path, node_tuple)
-
-    return type(id=id, init_tuple=node_tuple)
-
-
-def read_nodes(handle, type, groups=set(), watcher=None):
-    """Return all nodes of the specified type. If groups are specified, only return nodes in the specified groups."""
-
-    nodes = dict()
-    path = get_path(type)
-    for id in zookeeper.get_children(handle,path, watcher):
-        node = read_node(handle=handle, type=type, id=id)
-        if len(groups) > 0:
-            if node.in_groups(groups):
-                nodes[id] = node
-            else:
-                log.debug('Node is not in my group(s) (ignoring): %s', id)
-        else:
-            nodes[id] = node
-    return nodes
-
-
-def delete_node(handle, type, id):
-    """Delete a node from ZooKeeper"""
-
-    path = get_path(type, id)
-
-    log.debug('Deleting instance of %s: %s', type, path)
-    return zookeeper.delete(handle, path)
