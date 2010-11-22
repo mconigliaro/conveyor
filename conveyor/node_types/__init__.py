@@ -67,10 +67,13 @@ class Node(object):
         path = self.get_path()
         for id in zookeeper.get_children(handle,path, watcher):
             node = self.read(handle=handle, id=id)
-            if node.in_groups(groups):
-                nodes[id] = node
+            if self in [Application]:
+                if node.in_groups(groups):
+                    nodes[id] = node
+                else:
+                    log.debug('Node is not in my group(s) (ignoring): %s', id)
             else:
-                log.debug('Node is not in my group(s) (ignoring): %s', id)
+                nodes[id] = node
 
         return nodes
 
