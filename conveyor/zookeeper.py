@@ -7,7 +7,7 @@ from .logging import log
 
 ZK_PATH_SEP = '/'
 ZOO_OPEN_ACL_UNSAFE = {"perms":PERM_ALL, "scheme":"world", "id":"anyone"};
-ZOO_PERSISTENT = 0
+PERSISTENT = 0
 
 
 set_debug_level(0)
@@ -19,7 +19,7 @@ def get_parent_node(node, seperator=ZK_PATH_SEP):
     return seperator.join(node.split(seperator)[0:-1])
 
 
-def create_r(handle, path, data, acl=[ZOO_OPEN_ACL_UNSAFE], create_mode=ZOO_PERSISTENT):
+def create_r(handle, path, data, acl=[ZOO_OPEN_ACL_UNSAFE], create_mode=PERSISTENT):
     """Create nodes recursively"""
 
     while True:

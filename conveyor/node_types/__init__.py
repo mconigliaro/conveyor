@@ -10,7 +10,7 @@ class Node(object):
     """Base class for all nodes"""
 
     def __init__(self, id, data={}, attrs={}):
-        """Create attributes from tuple data"""
+        """Create a new node using the supplied data/attributes"""
 
         self.id = id
         self.path = self.get_path(id)
@@ -30,28 +30,28 @@ class Node(object):
         return path
 
     @classmethod
-    def list(self, handle, id=None):
+    def list(self, handle, id=None, watcher=None):
         """Return a sorted list of nodes of the specified type"""
 
         path = self.get_path(id)
 
-        result = sorted(zookeeper.get_children(handle, path))
-        log.debug('Listing nodes of type %s (%s): %s ', self, path, ', '.join(result))
+        result = sorted(zookeeper.get_children(handle, path, watcher))
+        log.debug('Listing nodes of type %s (%s): %s ', self.__name__, path, ', '.join(result))
         return result
 
     @classmethod
-    def read(self, handle, id):
+    def read(self, handle, id, watcher=None):
         """Read a node from ZooKeeper"""
 
         path = self.get_path(id)
 
-        node_tuple = zookeeper.get(handle, path)
-        log.debug('Read instance of %s: %s %s', self, path, node_tuple)
+        node_tuple = zookeeper.get(handle, path, watcher)
+        log.debug('Read instance of %s: %s %s', self.__name__, path, node_tuple)
 
         try:
             data = json.loads(node_tuple[0])
         except:
-            log.error('Unable to unserialize JSON in %s: %s', self.path, node_tuple[0])
+            log.error('Unable to unserialize JSON in %s: %s', path, node_tuple[0])
             data = None
 
         return self(id=id, data=data, attrs=node_tuple[1])
@@ -63,7 +63,7 @@ class Node(object):
         nodes = []
         path = self.get_path()
         for id in zookeeper.get_children(handle,path, watcher):
-            node = self.read(handle=handle, id=id)
+            node = self.read(handle=handle, id=id, watcher=watcher)
             if len(groups) > 0:
                 if node.in_groups(groups):
                     nodes.append(node)
@@ -74,13 +74,32 @@ class Node(object):
 
         return nodes
 
+    def write(self, handle, acl, flags, overwrite=True):
+        """Create a persistent node in ZooKeeper"""
+
+        while True:
+            try:
+                zookeeper.create(handle, self.path, json.dumps(self.data), acl, flags)
+                log.debug('Wrote instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
+                break
+            except zookeeper.NodeExistsException:
+                if overwrite:
+                    zookeeper.delete(handle, self.path)
+                    log.debug('Deleted old instance of %s: %s', self.__class__.__name__, self.path)
+                else:
+                    raise
+            except zookeeper.NoNodeException:
+                zookeeper.create_r(handle, zookeeper.get_parent_node(self.path), '', acl, zookeeper.PERSISTENT)
+
+        return self
+
     @classmethod
     def delete(self, handle, id):
         """Delete a node from ZooKeeper"""
 
         path = self.get_path(id)
 
-        log.debug('Deleting instance of %s: %s', self, path)
+        log.debug('Deleting instance of %s: %s', self.__name__, path)
         return zookeeper.delete(handle, path)
 
     def in_groups(self, groups=set()):
@@ -97,21 +116,10 @@ class EphemeralNode(Node):
     def __init__(self, id, data={}, attrs={}):
         super(EphemeralNode, self).__init__(id=id, data=data, attrs=attrs)
 
-    def write(self, handle):
+    def write(self, handle, acl=[zookeeper.ZOO_OPEN_ACL_UNSAFE], overwrite=True):
         """Create an ephemeral node in ZooKeeper"""
 
-        while True:
-            try:
-                zookeeper.create(handle, self.path, json.dumps(self.data), [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.EPHEMERAL)
-                log.debug('Wrote instance of %s: %s (%s)', self.__class__, self.path, self.data)
-                break
-            except zookeeper.NodeExistsException:
-                zookeeper.delete(handle, self.path)
-                log.debug('Deleted old instance of %s: %s', self.__class__, self.path)
-            except zookeeper.NoNodeException:
-                zookeeper.create_r(handle, zookeeper.get_parent_node(self.path), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
-
-        return self
+        return super(EphemeralNode, self).write(handle=handle, acl=acl, flags=zookeeper.EPHEMERAL, overwrite=overwrite)
 
 
 class PersistentNode(Node):
@@ -119,21 +127,10 @@ class PersistentNode(Node):
     def __init__(self, id, data={}, attrs={}):
         super(PersistentNode, self).__init__(id=id, data=data, attrs=attrs)
 
-    def write(self, handle):
+    def write(self, handle, acl=[zookeeper.ZOO_OPEN_ACL_UNSAFE], overwrite=True):
         """Create a persistent node in ZooKeeper"""
 
-        while True:
-            try:
-                zookeeper.create(handle, self.path, json.dumps(self.data), [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
-                log.debug('Wrote instance of %s: %s (%s)', self.__class__, self.path, self.data)
-                break
-            except zookeeper.NodeExistsException:
-                zookeeper.delete(handle, self.path)
-                log.debug('Deleted old instance of %s: %s', self.__class__, self.path)
-            except zookeeper.NoNodeException:
-                zookeeper.create_r(handle, zookeeper.get_parent_node(self.path), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
-
-        return self
+        return super(PersistentNode, self).write(handle=handle, acl=acl, flags=zookeeper.PERSISTENT, overwrite=overwrite)
 
 
 class Host(EphemeralNode):
@@ -141,7 +138,7 @@ class Host(EphemeralNode):
 
     def __init__(self, id, data={}, attrs={}):
         data['groups'] = data.get('groups', [])
-        super(self.__class__, self).__init__(id=id, data=data, attrs=attrs)
+        super(Host, self).__init__(id=id, data=data, attrs=attrs)
 
 
 class Application(PersistentNode):
@@ -150,15 +147,7 @@ class Application(PersistentNode):
     def __init__(self, id, data={}, attrs={}):
         data['groups'] = data.get('groups', [])
         data['version'] = data.get('version', '0.0')
-        super(self.__class__, self).__init__(id=id, data=data, attrs=attrs)
-
-    def version_greater_than(self, version='0'):
-        """Return True if the application's version is greater than the given version"""
-
-        result = False
-        if self.data['version'] > version:
-            result = True
-        return result
+        super(Application, self).__init__(id=id, data=data, attrs=attrs)
 
 
 class Deployment(PersistentNode):
@@ -168,20 +157,7 @@ class Deployment(PersistentNode):
         data['slots'] = data.get('slots', 1)
         data['completed'] = data.get('completed', 0)
         data['failed'] = data.get('failed', 0)
-        super(self.__class__, self).__init__(id=id, data=data, attrs=attrs)
-
-    def write(self, handle):
-        """Create a deployment node in ZooKeeper"""
-
-        while True:
-            try:
-                zookeeper.create(handle, self.path, json.dumps(self.data), [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
-                log.info('Wrote instance of %s: %s (%s)', self.__class__, self.path, self.data)
-                break
-            except zookeeper.NoNodeException:
-                zookeeper.create_r(handle, zookeeper.get_parent_node(self.path), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
-
-        return self
+        super(Deployment, self).__init__(id=id, data=data, attrs=attrs)
 
     def has_free_slot(self, handle):
         """Return True if the deployment has free slots"""
@@ -200,7 +176,7 @@ class DeploymentSlot(EphemeralNode):
         pass
 
     def __init__(self, id, data={}, attrs={}):
-        super(self.__class__, self).__init__(id=id, data=data, attrs=attrs)
+        super(DeploymentSlot, self).__init__(id=id, data=data, attrs=attrs)
 
     @classmethod
     def get_path(self, id=None):
@@ -217,12 +193,13 @@ class DeploymentSlot(EphemeralNode):
 
         deployment_id = zookeeper.get_parent_node(self.id)
         try:
-            deployment = Deployment(id=deployment_id).write(handle=handle)
+            deployment = Deployment(id=deployment_id).write(handle=handle, overwrite=False)
         except zookeeper.NodeExistsException:
             deployment = Deployment.read(handle=handle, id=deployment_id)
 
-        self.write(handle)
-        if deployment.data['slots'] < len(DeploymentSlot.list(handle=handle, id=deployment_id)):
+        self.write(handle=handle)
+        if deployment.has_free_slot(handle=handle):
+            self.delete(handle=handle, id=self.id)
             raise DeploymentSlot.NoFreeSlots
 
     @classmethod

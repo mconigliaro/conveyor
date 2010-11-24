@@ -24,7 +24,7 @@ class Default():
         else:
             result = None
 
-        log.debug('Compared local version (%s) to requested version (%s) and got action: %s', local_version, requested_version, result)
+        log.info('Compared local version (%s) to requested version (%s) and got action: %s', local_version, requested_version, result.__name__)
 
         return result
 

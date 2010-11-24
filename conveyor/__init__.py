@@ -42,6 +42,7 @@ class Conveyor(object):
             log.exception(e)
 
         finally:
+            self.cv.notify()
             self.cv.release()
 
     def __init_watcher(self, handle, type, state, path):
@@ -65,7 +66,7 @@ class Conveyor(object):
                             self.__call_app_handler()
                             break
                         except zookeeper.NoNodeException:
-                            zookeeper.create_r(self.handle, node_types.Application.get_path(), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.ZOO_PERSISTENT)
+                            zookeeper.create_r(self.handle, node_types.Application.get_path(), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.PERSISTENT)
 
             except Exception, e:
                 log.exception(e)
@@ -77,22 +78,24 @@ class Conveyor(object):
     def __apps_watcher(self, handle, type, state, path):
         """Handle application state changes"""
 
-        log.debug('Application change detected')
-        self.__call_app_handler()
+        log.debug('Application change detected: %s', path)
+        if zookeeper.exists(handle, path):
+            self.__call_app_handler()
 
     def __call_app_handler(self):
         """Call app handler as necessary"""
 
         for app in node_types.Application.read_all(handle=self.handle, groups=self.host.data['groups'], watcher=self.__apps_watcher):
-
             action = self.app_handler.get_action(app=app)
             if callable(action):
-                slot_id = zookeeper.ZK_PATH_SEP.join([app.id, self.host.id])
 
-                node_types.DeploymentSlot(id=slot_id).occupy(handle=self.handle)
+                try:
+                    slot_id = zookeeper.ZK_PATH_SEP.join([app.id, self.host.id])
+                    node_types.DeploymentSlot(id=slot_id).occupy(handle=self.handle)
+                    log.debug('Calling app_handler: %s.%s()', self.app_handler.__class__, action.__name__)
+                    result = action(app)
+                    log.info('app_handler returned: %s', result)
+                    node_types.DeploymentSlot.free(handle=self.handle, id=slot_id, result=result)
 
-                log.info('Calling app_handler: %s.%s()', self.app_handler.__class__, action.__name__)
-                result = action(app)
-                log.info('app_handler returned: %s', result)
-
-                node_types.DeploymentSlot.free(handle=self.handle, id=slot_id, result=result)
+                except node_types.DeploymentSlot.NoFreeSlots:
+                    log.info('Waiting for free slot')
