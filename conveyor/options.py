@@ -22,6 +22,18 @@ og_sess.add_option('--groups',
                    help="comma-separated list of groups")
 op.add_option_group(og_sess)
 
+og_dep = optparse.OptionGroup(op, 'Deployment Options')
+og_dep.add_option('--deployment-strategy',
+                  dest='deployment_strategy',
+                  type='choice',
+                  choices=['constant', 'linear', 'exponential'],
+                  help="constant, linear, exponential (default: %default)")
+og_dep.add_option('--deployment-factor',
+                  dest='deployment_factor',
+                  type='int',
+                  help="deployment factor (default: %default)")
+op.add_option_group(og_dep)
+
 og_log = optparse.OptionGroup(op, 'Output and Logging Options')
 og_log.add_option('--log-level',
                   dest='log_level',
@@ -50,6 +62,8 @@ op.set_defaults(servers = 'localhost:2181/conveyor',
                 timeout = 10,
                 host_id = socket.getfqdn(),
                 groups = [],
+                deployment_strategy = 'constant',
+                deployment_factor = '1',
                 log_level = 'info',
                 log_file_rotate_interval_type = 'd',
                 log_file_rotate_interval = 7,
@@ -58,7 +72,7 @@ op.set_defaults(servers = 'localhost:2181/conveyor',
 (options, args) = op.parse_args()
 
 if len(options.groups) > 0:
-    groups = list()
+    groups = []
     for group in options.groups.split(','):
         groups.append(group.strip())
     options.groups = list(set(groups)) # remove duplicate groups

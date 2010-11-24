@@ -19,8 +19,11 @@ class Conveyor(object):
     def __init__(self, servers=options.servers, timeout=options.timeout, host_id=options.host_id, groups=options.groups, app_handler=app_handlers.Default):
         """Connect to a ZooKeeper ensamble"""
 
-        self.host = node_types.Host(id=host_id, groups=groups)
-        self.app_handler = app_handler(self)
+        self.host = node_types.Host(id=host_id, data={'groups':groups})
+        if callable(app_handler):
+            self.app_handler = app_handler()
+        else:
+            log.warn('app_handler is not callable: %s', app_handler)
 
         self.conn_state = None
         self.handle = None
@@ -53,10 +56,10 @@ class Conveyor(object):
                 log.info('Connected with session ID: %x', zookeeper.client_id(handle)[0])
 
                 # create ephemeral host node
-                self.host.write(self.handle)
+                self.host.write(handle=self.handle)
 
                 # watch apps
-                if self.app_handler != None:
+                if hasattr(self, 'app_handler'):
                     while True:
                         try:
                             self.__call_app_handler()
@@ -71,16 +74,25 @@ class Conveyor(object):
                 self.cv.notify()
                 self.cv.release()
 
-    def __call_app_handler(self):
-        """Call app handler as necessary"""
-
-        apps = node_types.Application.read_all(handle=self.handle, groups=self.host.data['groups'], watcher=self.__apps_watcher)
-        if len(apps) > 0:
-            log.info('Calling run() method on app_handler: %s', self.app_handler.__class__)
-            self.app_handler.run(apps)
-
     def __apps_watcher(self, handle, type, state, path):
         """Handle application state changes"""
 
-        log.debug('Application state changed: %s', state)
+        log.debug('Application change detected')
         self.__call_app_handler()
+
+    def __call_app_handler(self):
+        """Call app handler as necessary"""
+
+        for app in node_types.Application.read_all(handle=self.handle, groups=self.host.data['groups'], watcher=self.__apps_watcher):
+
+            action = self.app_handler.get_action(app=app)
+            if callable(action):
+                slot_id = zookeeper.ZK_PATH_SEP.join([app.id, self.host.id])
+
+                node_types.DeploymentSlot(id=slot_id).occupy(handle=self.handle)
+
+                log.info('Calling app_handler: %s.%s()', self.app_handler.__class__, action.__name__)
+                result = action(app)
+                log.info('app_handler returned: %s', result)
+
+                node_types.DeploymentSlot.free(handle=self.handle, id=slot_id, result=result)
