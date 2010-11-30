@@ -11,7 +11,7 @@ def setup():
     client = conveyor.Conveyor(host_id='test_client', groups=['test_group0'])
 
     conveyor.zookeeper.delete_r(handle=client.handle, path='/applications')
-    conveyor.zookeeper.delete_r(handle=client.handle, path='/deployments')
+    #conveyor.zookeeper.delete_r(handle=client.handle, path='/deployments')
 
     apps.append(conveyor.node_types.Application(id='test_app0', data={'version': '1.0', 'groups': ['test_group0']}))
     apps.append(conveyor.node_types.Application(id='test_app1', data={'version': '2.0', 'groups': ['test_group0']}))

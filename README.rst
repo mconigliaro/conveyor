@@ -4,4 +4,5 @@ Conveyor
 
 To Do
 -----
-- Fix duplicate watchers problem
+- More tests
+- Implement app handler

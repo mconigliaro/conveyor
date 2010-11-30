@@ -22,10 +22,10 @@ class Node(object):
     def get_path(self, id=None):
         """Return the absolute path for a node"""
 
-        path = zookeeper.ZK_PATH_SEP + self.__name__.lower() + 's'
+        path = zookeeper.PATH_SEPARATOR + self.__name__.lower() + 's'
 
         if id != None:
-            path += zookeeper.ZK_PATH_SEP + id
+            path += zookeeper.PATH_SEPARATOR + id
 
         return path
 
@@ -57,13 +57,13 @@ class Node(object):
         return self(id=id, data=data, attrs=node_tuple[1])
 
     @classmethod
-    def read_all(self, handle, groups=set(), watcher=None):
+    def read_all(self, handle, groups=set(), root_watcher=None, child_watcher=None):
         """Return all nodes of the specified type. If groups are specified, only return nodes in the specified groups."""
 
         nodes = []
         path = self.get_path()
-        for id in zookeeper.get_children(handle,path, watcher):
-            node = self.read(handle=handle, id=id, watcher=watcher)
+        for id in zookeeper.get_children(handle,path, root_watcher):
+            node = self.read(handle=handle, id=id, watcher=child_watcher)
             if len(groups) > 0:
                 if node.in_groups(groups):
                     nodes.append(node)
@@ -182,10 +182,10 @@ class DeploymentSlot(EphemeralNode):
     def get_path(self, id=None):
         """Return the absolute path for a deployment slot node"""
 
-        path = zookeeper.ZK_PATH_SEP + 'deployments'
+        path = zookeeper.PATH_SEPARATOR + 'deployments'
 
         if id != None:
-            path += zookeeper.ZK_PATH_SEP + id
+            path += zookeeper.PATH_SEPARATOR + id
 
         return path
 

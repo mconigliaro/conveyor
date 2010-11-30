@@ -27,11 +27,13 @@ class Conveyor(object):
 
         self.conn_state = None
         self.handle = None
+        self.app_watchers = set()
 
         log.info('Connecting to ZooKeeper: %s', servers)
         try:
             self.cv = threading.Condition()
             self.cv.acquire()
+            zookeeper.deterministic_conn_order(0)
             self.handle = zookeeper.init(servers, self.__init_watcher, timeout * 1000)
             while self.conn_state != zookeeper.CONNECTED_STATE:
                 self.cv.wait(timeout)
@@ -44,6 +46,12 @@ class Conveyor(object):
         finally:
             self.cv.notify()
             self.cv.release()
+
+    def close(self):
+        """Terminate ZooKeeper session"""
+
+        log.info('Shutting down')
+        zookeeper.close(self.handle)
 
     def __init_watcher(self, handle, type, state, path):
         """Handle connection state changes"""
@@ -63,7 +71,7 @@ class Conveyor(object):
                 if hasattr(self, 'app_handler'):
                     while True:
                         try:
-                            self.__call_app_handler()
+                            self.__call_app_root_handler()
                             break
                         except zookeeper.NoNodeException:
                             zookeeper.create_r(self.handle, node_types.Application.get_path(), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.PERSISTENT)
@@ -75,22 +83,33 @@ class Conveyor(object):
                 self.cv.notify()
                 self.cv.release()
 
-    def __apps_watcher(self, handle, type, state, path):
-        """Handle application state changes"""
+    def __call_app_root_handler(self):
+        """Call app root handler as necessary"""
 
-        log.debug('Application change detected: %s', path)
-        if zookeeper.exists(handle, path):
-            self.__call_app_handler()
+        for id in node_types.Application.list(handle=self.handle, watcher=self.__app_root_watcher):
+            self.__call_app_handler(id)
 
-    def __call_app_handler(self):
+    def __app_root_watcher(self, handle, type, state, path):
+        """Handle changes to app root node"""
+
+        log.debug('Application change detected: type=%s, state=%s, path=%s', type, state, path)
+        self.__call_app_root_handler()
+
+    def __call_app_handler(self, id):
         """Call app handler as necessary"""
 
-        for app in node_types.Application.read_all(handle=self.handle, groups=self.host.data['groups'], watcher=self.__apps_watcher):
+        if id in self.app_watchers:
+            app = node_types.Application.read(handle=self.handle, id=id)
+        else:
+            self.app_watchers.add(id)
+            app = node_types.Application.read(handle=self.handle, id=id, watcher=self.__app_watcher)
+
+        if app.in_groups(self.host.data['groups']):
             action = self.app_handler.get_action(app=app)
             if callable(action):
 
                 try:
-                    slot_id = zookeeper.ZK_PATH_SEP.join([app.id, self.host.id])
+                    slot_id = zookeeper.PATH_SEPARATOR.join([app.id, self.host.id])
                     node_types.DeploymentSlot(id=slot_id).occupy(handle=self.handle)
                     log.debug('Calling app_handler: %s.%s()', self.app_handler.__class__, action.__name__)
                     result = action(app)
@@ -99,3 +118,12 @@ class Conveyor(object):
 
                 except node_types.DeploymentSlot.NoFreeSlots:
                     log.info('Waiting for free slot')
+
+    def __app_watcher(self, handle, type, state, path):
+        """Handle changes to individual app nodes"""
+
+        id = path.split(zookeeper.PATH_SEPARATOR)[-1]
+        self.app_watchers.discard(id)
+        if zookeeper.exists(self.handle, path):
+            log.debug('Application change detected: type=%s, state=%s, path=%s', type, state, path)
+            self.__call_app_handler(id)

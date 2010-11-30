@@ -16,6 +16,10 @@ if hasattr(os, "getuid") and os.getuid() != 0:
 import conveyor
 
 
-client = conveyor.Conveyor()
-while True:
-    time.sleep(1)
+try:
+    client = conveyor.Conveyor()
+    while True:
+        time.sleep(1)
+
+except KeyboardInterrupt:
+    client.close()

@@ -24,7 +24,7 @@ class Default():
         else:
             result = None
 
-        log.info('Compared local version (%s) to requested version (%s) and got action: %s', local_version, requested_version, result.__name__)
+        log.info('app=%s, lversion=%s, rversion=%s, action=%s', app.id, local_version, requested_version, result.__name__)
 
         return result
 

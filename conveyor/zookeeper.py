@@ -5,7 +5,7 @@ from zookeeper import *
 from .logging import log
 
 
-ZK_PATH_SEP = '/'
+PATH_SEPARATOR = '/'
 ZOO_OPEN_ACL_UNSAFE = {"perms":PERM_ALL, "scheme":"world", "id":"anyone"};
 PERSISTENT = 0
 
@@ -13,7 +13,7 @@ PERSISTENT = 0
 set_debug_level(0)
 
 
-def get_parent_node(node, seperator=ZK_PATH_SEP):
+def get_parent_node(node, seperator=PATH_SEPARATOR):
     """Return the parent of the given node"""
 
     return seperator.join(node.split(seperator)[0:-1])
@@ -41,4 +41,4 @@ def delete_r(handle, path):
             break
         except NotEmptyException:
             for child in get_children(handle, path):
-                delete_r(handle, ZK_PATH_SEP.join([path, child]))
+                delete_r(handle, PATH_SEPARATOR.join([path, child]))
