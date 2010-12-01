@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+from distutils import version
 import json
 
 from ..logging import log
@@ -14,7 +15,15 @@ class Node(object):
 
         self.id = id
         self.path = self.get_path(id)
+
+        if 'version' in data:
+            try:
+                data['version'] = str(version.StrictVersion(str(data['version'])))
+            except ValueError:
+                data['version'] = '0.0'
+
         self.data = data
+
         for name,value in attrs.items():
            setattr(self, name, value)
 
@@ -80,12 +89,13 @@ class Node(object):
         while True:
             try:
                 zookeeper.create(handle, self.path, json.dumps(self.data), acl, flags)
-                log.debug('Wrote instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
+                log.info('Wrote instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
                 break
             except zookeeper.NodeExistsException:
                 if overwrite:
-                    zookeeper.delete(handle, self.path)
-                    log.debug('Deleted old instance of %s: %s', self.__class__.__name__, self.path)
+                    zookeeper.set(handle, self.path, json.dumps(self.data))
+                    log.debug('Updated instance of %s: %s', self.__class__.__name__, self.path)
+                    break
                 else:
                     raise
             except zookeeper.NoNodeException:
@@ -99,7 +109,7 @@ class Node(object):
 
         path = self.get_path(id)
 
-        log.debug('Deleting instance of %s: %s', self.__name__, path)
+        log.info('Deleting instance of %s: %s', self.__name__, path)
         return zookeeper.delete(handle, path)
 
     def in_groups(self, groups=set()):
@@ -163,7 +173,7 @@ class Deployment(PersistentNode):
         """Return True if the deployment has free slots"""
 
         result = False
-        if self.data['slots'] < len(DeploymentSlot.list(handle=handle)):
+        if self.data['slots'] >= len(DeploymentSlot.list(handle=handle)):
             result = True
         return result
 
@@ -173,7 +183,6 @@ class DeploymentSlot(EphemeralNode):
 
     class NoFreeSlots(Exception):
         """Exception raised when no free slots are available"""
-        pass
 
     def __init__(self, id, data={}, attrs={}):
         super(DeploymentSlot, self).__init__(id=id, data=data, attrs=attrs)
@@ -198,26 +207,34 @@ class DeploymentSlot(EphemeralNode):
             deployment = Deployment.read(handle=handle, id=deployment_id)
 
         self.write(handle=handle)
-        if deployment.has_free_slot(handle=handle):
+        if not deployment.has_free_slot(handle=handle):
             self.delete(handle=handle, id=self.id)
             raise DeploymentSlot.NoFreeSlots
 
     @classmethod
-    def free(self, handle, id, result):
+    def free(self, handle, id, app_handler_result, deployment_strategy, deployment_factor):
 
-        deployment = self.read(handle=handle, id=zookeeper.get_parent_node(id))
+        deployment = Deployment.read(handle=handle, id=zookeeper.get_parent_node(id))
         new_data = deployment.data
 
-        new_data['slots'] += 1
-        if result:
+        if app_handler_result:
             new_data['completed'] += 1
         else:
             new_data['failed'] += 1
 
+        if deployment_strategy == 'exponential':
+            new_data['slots'] += 1 * deployment_factor
+        elif deployment_strategy == 'linear':
+            new_data['slots'] += 1 + deployment_factor
+        else:
+            new_data['slots'] = deployment_factor
+
+        deployment.write(handle=handle)
+
 
         self.delete(handle=handle, id=id)
 
-        try:
-            Deployment.delete(handle=handle, id=zookeeper.get_parent_node(id))
-        except zookeeper.NodeExistsException:
-            pass
+        #try:
+        #    Deployment.delete(handle=handle, id=zookeeper.get_parent_node(id))
+        #except zookeeper.NodeExistsException:
+        #    pass

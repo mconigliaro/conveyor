@@ -4,5 +4,5 @@ Conveyor
 
 To Do
 -----
-- More tests
+- Fix deployment strategy
 - Implement app handler

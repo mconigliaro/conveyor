@@ -29,13 +29,10 @@ class Default():
         return result
 
     def get_version(self, id):
-        log.critical('###### FIXME: running get_version ######')
-        return '1.0'
+        return '0.0'
 
     def upgrade(self, data):
-        log.critical('###### FIXME: running upgrade ######')
         return True
 
     def downgrade(self, data):
-        log.critical('###### FIXME: running downgrade ######')
         return True

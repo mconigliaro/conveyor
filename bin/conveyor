@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 
 import os
+import re
 import string
 import sys
 import time
@@ -17,9 +18,37 @@ import conveyor
 
 
 try:
-    client = conveyor.Conveyor()
-    while True:
-        time.sleep(1)
+
+    if len(conveyor.args) > 0:
+        client = conveyor.Conveyor(app_handler=None)
+
+        if conveyor.args[0] == 'application':
+            if conveyor.args[1] == 'create':
+                conveyor.node_types.Application(id=conveyor.args[2], data={'groups':conveyor.options.groups, 'version':conveyor.args[3]}).write(handle=client.handle)
+            elif conveyor.args[1] == 'delete':
+                conveyor.node_types.Application.delete(handle=client.handle, id=conveyor.args[2])
+            elif conveyor.args[1] == 'list':
+                print map(lambda app: app.id, conveyor.node_types.Application.read_all(handle=client.handle, groups=conveyor.options.groups))
+            elif conveyor.args[1] == 'get':
+                print conveyor.node_types.Application.read(handle=client.handle, id=conveyor.args[2]).data
+            else:
+                raise AttributeError, "Unknown command: %s" % (' '.join(conveyor.args))
+
+        else:
+            raise AttributeError, "Unknown command: %s" % (' '.join(conveyor.args))
+
+    else:
+        client = conveyor.Conveyor()
+        while True:
+            time.sleep(1)
+
+except IndexError:
+    conveyor.log.error('Missing argument')
+
+except AttributeError, e:
+    conveyor.log.error(e)
 
 except KeyboardInterrupt:
-    client.close()
+    pass
+
+client.close()

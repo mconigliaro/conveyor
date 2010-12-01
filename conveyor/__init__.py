@@ -14,7 +14,7 @@ from . import zookeeper
 
 
 class Conveyor(object):
-    """The main Conveyor class"""
+    """The main conveyor class"""
 
     def __init__(self, servers=options.servers, timeout=options.timeout, host_id=options.host_id, groups=options.groups, app_handler=app_handlers.Default):
         """Connect to a ZooKeeper ensamble"""
@@ -23,7 +23,7 @@ class Conveyor(object):
         if callable(app_handler):
             self.app_handler = app_handler()
         else:
-            log.warn('app_handler is not callable: %s', app_handler)
+            log.debug('app_handler is NOT callable: %s', app_handler)
 
         self.conn_state = None
         self.handle = None
@@ -50,7 +50,7 @@ class Conveyor(object):
     def close(self):
         """Terminate ZooKeeper session"""
 
-        log.info('Shutting down')
+        log.info('Closing connection')
         zookeeper.close(self.handle)
 
     def __init_watcher(self, handle, type, state, path):
@@ -64,14 +64,11 @@ class Conveyor(object):
                 self.cv.acquire()
                 log.info('Connected with session ID: %x', zookeeper.client_id(handle)[0])
 
-                # create ephemeral host node
-                self.host.write(handle=self.handle)
-
-                # watch apps
                 if hasattr(self, 'app_handler'):
+                    self.host.write(handle=self.handle) # create ephemeral host node
                     while True:
                         try:
-                            self.__call_app_root_handler()
+                            self.__call_app_root_handler() # watch apps
                             break
                         except zookeeper.NoNodeException:
                             zookeeper.create_r(self.handle, node_types.Application.get_path(), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.PERSISTENT)
@@ -84,13 +81,13 @@ class Conveyor(object):
                 self.cv.release()
 
     def __call_app_root_handler(self):
-        """Call app root handler as necessary"""
+        """Call app handler on all application nodes"""
 
         for id in node_types.Application.list(handle=self.handle, watcher=self.__app_root_watcher):
             self.__call_app_handler(id)
 
     def __app_root_watcher(self, handle, type, state, path):
-        """Handle changes to app root node"""
+        """Handle additions/deletions of application nodes"""
 
         log.debug('Application change detected: type=%s, state=%s, path=%s', type, state, path)
         self.__call_app_root_handler()
@@ -114,13 +111,13 @@ class Conveyor(object):
                     log.debug('Calling app_handler: %s.%s()', self.app_handler.__class__, action.__name__)
                     result = action(app)
                     log.info('app_handler returned: %s', result)
-                    node_types.DeploymentSlot.free(handle=self.handle, id=slot_id, result=result)
+                    node_types.DeploymentSlot.free(handle=self.handle, id=slot_id, app_handler_result=result, deployment_strategy=options.deployment_strategy, deployment_factor=options.deployment_factor)
 
                 except node_types.DeploymentSlot.NoFreeSlots:
                     log.info('Waiting for free slot')
 
     def __app_watcher(self, handle, type, state, path):
-        """Handle changes to individual app nodes"""
+        """Handle changes to application nodes"""
 
         id = path.split(zookeeper.PATH_SEPARATOR)[-1]
         self.app_watchers.discard(id)
