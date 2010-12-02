@@ -49,6 +49,5 @@ except AttributeError, e:
     conveyor.log.error(e)
 
 except KeyboardInterrupt:
-    pass
-
-client.close()
+    client.close()
+    sys.exit()

@@ -13,13 +13,30 @@ PERSISTENT = 0
 set_debug_level(0)
 
 
-def get_parent_node(node, seperator=PATH_SEPARATOR):
+def zkjoin(list, absolute=False):
+    """Construct a path from a list"""
+
+    if absolute:
+        result = PATH_SEPARATOR + PATH_SEPARATOR.join(list)
+    else:
+        result = PATH_SEPARATOR.join(list)
+
+    return result
+
+
+def zksplit(path):
+    """Split a path into an array"""
+
+    return filter(lambda i: i != '', path.split(PATH_SEPARATOR))
+
+
+def get_parent_node(node):
     """Return the parent of the given node"""
 
-    return seperator.join(node.split(seperator)[0:-1])
+    return zkjoin(zksplit(node)[0:-1], absolute=True)
 
 
-def create_r(handle, path, data, acl=[ZOO_OPEN_ACL_UNSAFE], create_mode=PERSISTENT):
+def create_r(handle, path, data='', acl=[ZOO_OPEN_ACL_UNSAFE], create_mode=PERSISTENT):
     """Create nodes recursively"""
 
     while True:
@@ -28,7 +45,7 @@ def create_r(handle, path, data, acl=[ZOO_OPEN_ACL_UNSAFE], create_mode=PERSISTE
             log.debug('Created node: %s', path)
             break
         except NoNodeException:
-            create_r(handle, get_parent_node(path), data, acl, create_mode)
+            create_r(handle, get_parent_node(path), data='', acl=acl, create_mode=PERSISTENT)
 
 
 def delete_r(handle, path):
@@ -41,4 +58,4 @@ def delete_r(handle, path):
             break
         except NotEmptyException:
             for child in get_children(handle, path):
-                delete_r(handle, PATH_SEPARATOR.join([path, child]))
+                delete_r(handle, zkjoin([path, child]))

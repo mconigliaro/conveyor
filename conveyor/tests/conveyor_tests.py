@@ -8,10 +8,9 @@ apps = []
 def setup():
     global client, apps
 
-    client = conveyor.Conveyor(host_id='test_client', groups=['test_group0'])
+    client = conveyor.Conveyor(host_id='test_client', groups=['test_group0'], app_handler=None)
 
     conveyor.zookeeper.delete_r(handle=client.handle, path='/applications')
-    #conveyor.zookeeper.delete_r(handle=client.handle, path='/deployments')
 
     apps.append(conveyor.node_types.Application(id='test_app0', data={'version': '1.0', 'groups': ['test_group0']}))
     apps.append(conveyor.node_types.Application(id='test_app1', data={'version': '2.0', 'groups': ['test_group0']}))
@@ -30,10 +29,8 @@ def test_conveyor():
     assert conveyor.node_types.Application.read(handle=client.handle, id='test_app0').in_groups(['test_group0'])
     assert not conveyor.node_types.Application.read(handle=client.handle, id='test_app0').in_groups(['test_group1'])
 
-    assert len(conveyor.node_types.Host.read_all(handle=client.handle)) == 1
     assert len(conveyor.node_types.Application.read_all(handle=client.handle, groups=['test_group0'])) == 2
 
-    assert len(conveyor.node_types.Host.list(handle=client.handle)) == 1
     assert len(conveyor.node_types.Application.list(handle=client.handle)) == 3
 
     for app in apps:

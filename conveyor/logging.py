@@ -12,7 +12,7 @@ log = logging.getLogger()
 log.setLevel(getattr(logging, options.log_level.upper()))
 
 # set log format
-log_format = logging.Formatter("%(asctime)s:%(process)d:%(levelname)s@%(funcName)s@%(lineno)d: %(message)s")
+log_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
 # configure console logger
 console_logger = logging.StreamHandler()
@@ -20,7 +20,7 @@ console_logger.setFormatter(log_format)
 log.addHandler(console_logger)
 
 # configure file logger
-if options.log_file_path != None:
+if options.log_file_path:
     zookeeper.set_log_stream(options.log_file_path)
 
     fileLogger = logging.handlers.TimedRotatingFileHandler(

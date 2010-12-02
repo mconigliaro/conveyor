@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 from distutils import version
 import json
+import re
 
 from ..logging import log
 from .. import zookeeper
@@ -14,7 +15,7 @@ class Node(object):
         """Create a new node using the supplied data/attributes"""
 
         self.id = id
-        self.path = self.get_path(id)
+        self.path = self.get_path(id=id)
 
         if 'version' in data:
             try:
@@ -31,10 +32,13 @@ class Node(object):
     def get_path(self, id=None):
         """Return the absolute path for a node"""
 
-        path = zookeeper.PATH_SEPARATOR + self.__name__.lower() + 's'
+        if self.__name__ == 'DeploymentSlot':
+            path = zookeeper.zkjoin(['applications'], absolute=True)
+        else:
+            path = zookeeper.zkjoin([self.__name__.lower() + 's'], absolute=True)
 
-        if id != None:
-            path += zookeeper.PATH_SEPARATOR + id
+        if id:
+            path += zookeeper.zkjoin([id], absolute=True)
 
         return path
 
@@ -71,7 +75,7 @@ class Node(object):
 
         nodes = []
         path = self.get_path()
-        for id in zookeeper.get_children(handle,path, root_watcher):
+        for id in zookeeper.get_children(handle, path, root_watcher):
             node = self.read(handle=handle, id=id, watcher=child_watcher)
             if len(groups) > 0:
                 if node.in_groups(groups):
@@ -83,18 +87,21 @@ class Node(object):
 
         return nodes
 
-    def write(self, handle, acl, flags, overwrite=True):
+    def write(self, handle, acl, flags, overwrite=True, overwrite_if_version=None):
         """Create a persistent node in ZooKeeper"""
 
         while True:
             try:
                 zookeeper.create(handle, self.path, json.dumps(self.data), acl, flags)
-                log.info('Wrote instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
+                log.debug('Wrote instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
                 break
             except zookeeper.NodeExistsException:
                 if overwrite:
-                    zookeeper.set(handle, self.path, json.dumps(self.data))
-                    log.debug('Updated instance of %s: %s', self.__class__.__name__, self.path)
+                    if overwrite_if_version:
+                        zookeeper.set(handle, self.path, json.dumps(self.data), overwrite_if_version)
+                    else:
+                        zookeeper.set(handle, self.path, json.dumps(self.data))
+                    log.debug('Updated instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
                     break
                 else:
                     raise
@@ -109,7 +116,7 @@ class Node(object):
 
         path = self.get_path(id)
 
-        log.info('Deleting instance of %s: %s', self.__name__, path)
+        log.debug('Deleting instance of %s: %s', self.__name__, path)
         return zookeeper.delete(handle, path)
 
     def in_groups(self, groups=set()):
@@ -122,25 +129,27 @@ class Node(object):
 
 
 class EphemeralNode(Node):
+    """Ephemeral node class"""
 
     def __init__(self, id, data={}, attrs={}):
         super(EphemeralNode, self).__init__(id=id, data=data, attrs=attrs)
 
-    def write(self, handle, acl=[zookeeper.ZOO_OPEN_ACL_UNSAFE], overwrite=True):
+    def write(self, handle, acl=[zookeeper.ZOO_OPEN_ACL_UNSAFE], overwrite=True, overwrite_if_version=None):
         """Create an ephemeral node in ZooKeeper"""
 
-        return super(EphemeralNode, self).write(handle=handle, acl=acl, flags=zookeeper.EPHEMERAL, overwrite=overwrite)
+        return super(EphemeralNode, self).write(handle=handle, acl=acl, flags=zookeeper.EPHEMERAL, overwrite=overwrite, overwrite_if_version=overwrite_if_version)
 
 
 class PersistentNode(Node):
+    """Persistent node class"""
 
     def __init__(self, id, data={}, attrs={}):
         super(PersistentNode, self).__init__(id=id, data=data, attrs=attrs)
 
-    def write(self, handle, acl=[zookeeper.ZOO_OPEN_ACL_UNSAFE], overwrite=True):
+    def write(self, handle, acl=[zookeeper.ZOO_OPEN_ACL_UNSAFE], overwrite=True, overwrite_if_version=None):
         """Create a persistent node in ZooKeeper"""
 
-        return super(PersistentNode, self).write(handle=handle, acl=acl, flags=zookeeper.PERSISTENT, overwrite=overwrite)
+        return super(PersistentNode, self).write(handle=handle, acl=acl, flags=zookeeper.PERSISTENT, overwrite=overwrite, overwrite_if_version=overwrite_if_version)
 
 
 class Host(EphemeralNode):
@@ -148,32 +157,30 @@ class Host(EphemeralNode):
 
     def __init__(self, id, data={}, attrs={}):
         data['groups'] = data.get('groups', [])
+
         super(Host, self).__init__(id=id, data=data, attrs=attrs)
 
 
 class Application(PersistentNode):
     """Application node class"""
 
+    class DeploymentSlotOverflow(Exception):
+        """Exception raised on deployment slot overflow"""
+
     def __init__(self, id, data={}, attrs={}):
         data['groups'] = data.get('groups', [])
         data['version'] = data.get('version', '0.0')
+        data['deployment_slots'] = data.get('deployment_slots', 1)
+        data['deployment_completed'] = data.get('deployment_completed', 0)
+        data['deployment_failed'] = data.get('deployment_failed', 0)
+
         super(Application, self).__init__(id=id, data=data, attrs=attrs)
 
-
-class Deployment(PersistentNode):
-    """Deployment node class"""
-
-    def __init__(self, id, data={}, attrs={}):
-        data['slots'] = data.get('slots', 1)
-        data['completed'] = data.get('completed', 0)
-        data['failed'] = data.get('failed', 0)
-        super(Deployment, self).__init__(id=id, data=data, attrs=attrs)
-
-    def has_free_slot(self, handle):
-        """Return True if the deployment has free slots"""
+    def deployment_slot_overflow(self, handle):
+        """Return True on deployment slot overflow"""
 
         result = False
-        if self.data['slots'] >= len(DeploymentSlot.list(handle=handle)):
+        if len(DeploymentSlot.list(handle=handle, id=self.id)) > self.data['deployment_slots']:
             result = True
         return result
 
@@ -181,60 +188,53 @@ class Deployment(PersistentNode):
 class DeploymentSlot(EphemeralNode):
     """Deployment slot node class"""
 
-    class NoFreeSlots(Exception):
-        """Exception raised when no free slots are available"""
+    class InvalidId(Exception):
+        """Exception raised when using an invalid slot id (should look like: <application>/<host_id>)"""
 
     def __init__(self, id, data={}, attrs={}):
+        if not re.match('.+%s.+' % (zookeeper.PATH_SEPARATOR), id):
+            raise InvalidId
+
         super(DeploymentSlot, self).__init__(id=id, data=data, attrs=attrs)
 
-    @classmethod
-    def get_path(self, id=None):
-        """Return the absolute path for a deployment slot node"""
-
-        path = zookeeper.PATH_SEPARATOR + 'deployments'
-
-        if id != None:
-            path += zookeeper.PATH_SEPARATOR + id
-
-        return path
 
     def occupy(self, handle):
-
-        deployment_id = zookeeper.get_parent_node(self.id)
-        try:
-            deployment = Deployment(id=deployment_id).write(handle=handle, overwrite=False)
-        except zookeeper.NodeExistsException:
-            deployment = Deployment.read(handle=handle, id=deployment_id)
+        """Occupy a free deployment slot"""
 
         self.write(handle=handle)
-        if not deployment.has_free_slot(handle=handle):
-            self.delete(handle=handle, id=self.id)
-            raise DeploymentSlot.NoFreeSlots
+
+        while True:
+            try:
+                app = Application.read(handle=handle, id=zookeeper.zksplit(self.id)[0])
+                if app.deployment_slot_overflow(handle=handle):
+                    self.delete(handle=handle, id=self.id)
+                    raise Application.DeploymentSlotOverflow
+                else:
+                    app.data['deployment_slots'] -= 1
+                    app.write(handle=handle, overwrite_if_version=app.version)
+                    break
+
+            except zookeeper.BadVersionException:
+                log.debug('Version mismatch (retrying)')
 
     @classmethod
-    def free(self, handle, id, app_handler_result, deployment_strategy, deployment_factor):
-
-        deployment = Deployment.read(handle=handle, id=zookeeper.get_parent_node(id))
-        new_data = deployment.data
-
-        if app_handler_result:
-            new_data['completed'] += 1
-        else:
-            new_data['failed'] += 1
-
-        if deployment_strategy == 'exponential':
-            new_data['slots'] += 1 * deployment_factor
-        elif deployment_strategy == 'linear':
-            new_data['slots'] += 1 + deployment_factor
-        else:
-            new_data['slots'] = deployment_factor
-
-        deployment.write(handle=handle)
-
+    def free(self, handle, id, app_handler_result, deployment_factor):
+        """Free up a deployment slot"""
 
         self.delete(handle=handle, id=id)
 
-        #try:
-        #    Deployment.delete(handle=handle, id=zookeeper.get_parent_node(id))
-        #except zookeeper.NodeExistsException:
-        #    pass
+        while True:
+            try:
+                app = Application.read(handle=handle, id=zookeeper.zksplit(id)[0])
+
+                if app_handler_result:
+                    app.data['deployment_completed'] += 1
+                else:
+                    app.data['deployment_failed'] += 1
+                app.data['deployment_slots'] += deployment_factor
+
+                app.write(handle=handle, overwrite_if_version=app.version)
+                break
+
+            except zookeeper.BadVersionException:
+                    log.debug('Version mismatch (retrying)')
