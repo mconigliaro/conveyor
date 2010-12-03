@@ -11,10 +11,10 @@ def setup():
 
 
 def test_zookeeper():
-    assert conveyor.zookeeper.zkjoin(['a', 'b', 'c']) == 'a/b/c'
-    assert conveyor.zookeeper.zkjoin(['a', 'b', 'c'], absolute=True) == '/a/b/c'
+    assert conveyor.zookeeper.path_join(['a', 'b', 'c']) == 'a/b/c'
+    assert conveyor.zookeeper.path_join(['a', 'b', 'c'], absolute=True) == '/a/b/c'
 
-    assert conveyor.zookeeper.zksplit('/a/b/c') == ['a', 'b', 'c']
+    assert conveyor.zookeeper.path_split('/a/b/c') == ['a', 'b', 'c']
 
     assert conveyor.zookeeper.get_parent_node('/a/b/c') == '/a/b'
 

@@ -2,9 +2,9 @@ from __future__ import absolute_import
 
 from distutils import version
 import json
+import logging
 import re
 
-from ..logging import log
 from .. import zookeeper
 
 
@@ -33,12 +33,12 @@ class Node(object):
         """Return the absolute path for a node"""
 
         if self.__name__ == 'DeploymentSlot':
-            path = zookeeper.zkjoin(['applications'], absolute=True)
+            path = zookeeper.path_join(['applications'], absolute=True)
         else:
-            path = zookeeper.zkjoin([self.__name__.lower() + 's'], absolute=True)
+            path = zookeeper.path_join([self.__name__.lower() + 's'], absolute=True)
 
         if id:
-            path += zookeeper.zkjoin([id], absolute=True)
+            path += zookeeper.path_join([id], absolute=True)
 
         return path
 
@@ -49,7 +49,7 @@ class Node(object):
         path = self.get_path(id)
 
         result = sorted(zookeeper.get_children(handle, path, watcher))
-        log.debug('Listing nodes of type %s (%s): %s ', self.__name__, path, ', '.join(result))
+        logging.getLogger().debug('Listing nodes of type %s (%s): %s ', self.__name__, path, ', '.join(result))
         return result
 
     @classmethod
@@ -59,12 +59,12 @@ class Node(object):
         path = self.get_path(id)
 
         node_tuple = zookeeper.get(handle, path, watcher)
-        log.debug('Read instance of %s: %s %s', self.__name__, path, node_tuple)
+        logging.getLogger().debug('Read instance of %s: %s %s', self.__name__, path, node_tuple)
 
         try:
             data = json.loads(node_tuple[0])
         except:
-            log.error('Unable to unserialize JSON in %s: %s', path, node_tuple[0])
+            logging.getLogger().error('Unable to unserialize JSON in %s: %s', path, node_tuple[0])
             data = None
 
         return self(id=id, data=data, attrs=node_tuple[1])
@@ -81,7 +81,7 @@ class Node(object):
                 if node.in_groups(groups):
                     nodes.append(node)
                 else:
-                    log.debug('Node is not in my group(s) (ignoring): %s', id)
+                    logging.getLogger().debug('Node is not in my group(s) (ignoring): %s', id)
             else:
                 nodes.append(node)
 
@@ -93,7 +93,7 @@ class Node(object):
         while True:
             try:
                 zookeeper.create(handle, self.path, json.dumps(self.data), acl, flags)
-                log.debug('Wrote instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
+                logging.getLogger().debug('Wrote instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
                 break
             except zookeeper.NodeExistsException:
                 if overwrite:
@@ -101,7 +101,7 @@ class Node(object):
                         zookeeper.set(handle, self.path, json.dumps(self.data), overwrite_if_version)
                     else:
                         zookeeper.set(handle, self.path, json.dumps(self.data))
-                    log.debug('Updated instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
+                    logging.getLogger().debug('Updated instance of %s: %s (%s)', self.__class__.__name__, self.path, self.data)
                     break
                 else:
                     raise
@@ -116,7 +116,7 @@ class Node(object):
 
         path = self.get_path(id)
 
-        log.debug('Deleting instance of %s: %s', self.__name__, path)
+        logging.getLogger().debug('Deleting instance of %s: %s', self.__name__, path)
         return zookeeper.delete(handle, path)
 
     def in_groups(self, groups=set()):
@@ -170,6 +170,7 @@ class Application(PersistentNode):
     def __init__(self, id, data={}, attrs={}):
         data['groups'] = data.get('groups', [])
         data['version'] = data.get('version', '0.0')
+        data['deployment_slot_increment'] = data.get('deployment_slot_increment', 1)
         data['deployment_slots'] = data.get('deployment_slots', 1)
         data['deployment_completed'] = data.get('deployment_completed', 0)
         data['deployment_failed'] = data.get('deployment_failed', 0)
@@ -205,7 +206,7 @@ class DeploymentSlot(EphemeralNode):
 
         while True:
             try:
-                app = Application.read(handle=handle, id=zookeeper.zksplit(self.id)[0])
+                app = Application.read(handle=handle, id=zookeeper.path_split(self.id)[0])
                 if app.deployment_slot_overflow(handle=handle):
                     self.delete(handle=handle, id=self.id)
                     raise Application.DeploymentSlotOverflow
@@ -215,26 +216,26 @@ class DeploymentSlot(EphemeralNode):
                     break
 
             except zookeeper.BadVersionException:
-                log.debug('Version mismatch (retrying)')
+                logging.getLogger().debug('Version mismatch (retrying)')
 
     @classmethod
-    def free(self, handle, id, app_handler_result, deployment_factor):
+    def free(self, handle, id, app_handler_result):
         """Free up a deployment slot"""
 
         self.delete(handle=handle, id=id)
 
         while True:
             try:
-                app = Application.read(handle=handle, id=zookeeper.zksplit(id)[0])
+                app = Application.read(handle=handle, id=zookeeper.path_split(id)[0])
 
                 if app_handler_result:
                     app.data['deployment_completed'] += 1
                 else:
                     app.data['deployment_failed'] += 1
-                app.data['deployment_slots'] += deployment_factor
+                app.data['deployment_slots'] += app.data['deployment_slot_increment']
 
                 app.write(handle=handle, overwrite_if_version=app.version)
                 break
 
             except zookeeper.BadVersionException:
-                    log.debug('Version mismatch (retrying)')
+                    logging.getLogger().debug('Version mismatch (retrying)')

@@ -1,9 +1,8 @@
 from __future__ import absolute_import
 
 from distutils import version
+import logging
 import time
-
-from ..logging import log
 
 
 class Default():
@@ -11,7 +10,7 @@ class Default():
 
     def __init__(self, host):
         self.host = host
-        log.debug('Initialized app handler: %s', self.__class__)
+        logging.getLogger().debug('Initialized app handler: %s', self.__class__)
 
     def get_action(self, application):
         """Select the appropriate action"""
@@ -27,7 +26,7 @@ class Default():
             result = None
 
         if callable(result):
-            log.info('%s %s: %s => %s', result.__name__.capitalize(), application.id, local_version, requested_version)
+            logging.getLogger().info('%s %s: %s => %s', result.__name__.capitalize(), application.id, local_version, requested_version)
 
         return result
 
