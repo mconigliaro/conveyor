@@ -103,7 +103,13 @@ class Conveyor(object):
 
         application = nodes.Application.read(handle=self.handle, path=path)
         if application.in_groups(self.host.data['groups']):
-            app_handler_action = self.app_handler.get_action(application)
+
+            try:
+                app_handler_action = False
+                app_handler_action = self.app_handler.get_action(application)
+            except Exception, e:
+                logging.getLogger().exception(e)
+
             if callable(app_handler_action):
 
                 slot_path = zookeeper.path_join('applications', application.id, self.host.id)
@@ -114,7 +120,13 @@ class Conveyor(object):
                     try:
                         nodes.DeploymentSlot(path=slot_path).occupy(handle=self.handle)
                         logging.getLogger().debug('Calling application handler: %s.%s()', self.app_handler.__class__, app_handler_action.__name__)
-                        result = app_handler_action(application)
+
+                        try:
+                            result = False
+                            result = app_handler_action(application)
+                        except Exception, e:
+                            logging.getLogger().exception(e)
+
                         logging.getLogger().info('Application handler returned: %s', result)
                         nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, app_handler_result=result)
                         break
