@@ -12,14 +12,13 @@ PERSISTENT = 0
 
 set_debug_level(0)
 
+def path_join(*path_parts, **options):
+    """Construct a path from a list of path parts"""
 
-def path_join(list, absolute=False):
-    """Construct a path from a list"""
+    result =  PATH_SEPARATOR.join(filter(lambda i: i != None and i != '', path_parts))
 
-    if absolute:
-        result = PATH_SEPARATOR + PATH_SEPARATOR.join(list)
-    else:
-        result = PATH_SEPARATOR.join(list)
+    if 'relative' not in options or not options['relative']:
+        result = PATH_SEPARATOR + result
 
     return result
 
@@ -33,7 +32,7 @@ def path_split(path):
 def get_parent_node(node):
     """Return the parent of the given node"""
 
-    return path_join(path_split(node)[0:-1], absolute=True)
+    return path_join(*path_split(node)[0:-1])
 
 
 def create_r(handle, path, data='', acl=[ZOO_OPEN_ACL_UNSAFE], create_mode=PERSISTENT):
@@ -58,4 +57,4 @@ def delete_r(handle, path):
             break
         except NotEmptyException:
             for child in get_children(handle, path):
-                delete_r(handle, path_join([path, child]))
+                delete_r(handle, path_join(path, child, relative=True))

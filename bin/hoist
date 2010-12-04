@@ -79,15 +79,17 @@ client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout, gro
 
 if options.action == 'create':
     data = {
+        'name': options.application_id,
         'groups':options.groups,
         'version':options.application_version,
         'deployment_slots':options.deployment_slots,
         'deployment_slot_increment':options.deployment_slot_increment
     }
-    print conveyor.node_types.Application(id=options.application_id, data=data).write(handle=client.handle).data
+    path = conveyor.zookeeper.path_join('applications', options.application_id)
+    print "%s (%s)" % (path, conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
 elif options.action == 'delete':
-    print conveyor.node_types.Application.delete(handle=client.handle, id=options.application_id)
+    print conveyor.nodes.delete(handle=client.handle, path=conveyor.zookeeper.path_join('applications', options.application_id))
 elif options.action == 'list':
-    print map(lambda app: app.id, conveyor.node_types.Application.read_all(handle=client.handle, groups=options.groups))
+    print map(lambda app: conveyor.zookeeper.path_split(app.path)[-1], conveyor.nodes.Application.read_all(handle=client.handle, path=conveyor.zookeeper.path_join('applications'), groups=options.groups))
 elif options.action == 'get':
-    print conveyor.node_types.Application.read(handle=client.handle, id=options.application_id).data
+    print conveyor.nodes.Application.read(handle=client.handle, path=conveyor.zookeeper.path_join('applications', options.application_id)).data

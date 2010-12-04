@@ -7,12 +7,12 @@ client = None
 def setup():
     global client
 
-    client = conveyor.Conveyor(host_id='test_client', app_handler=None)
+    client = conveyor.Conveyor(app_handler=None)
 
 
 def test_zookeeper():
-    assert conveyor.zookeeper.path_join(['a', 'b', 'c']) == 'a/b/c'
-    assert conveyor.zookeeper.path_join(['a', 'b', 'c'], absolute=True) == '/a/b/c'
+    assert conveyor.zookeeper.path_join('a', 'b', 'c') == '/a/b/c'
+    assert conveyor.zookeeper.path_join('a', 'b', 'c', relative=True) == 'a/b/c'
 
     assert conveyor.zookeeper.path_split('/a/b/c') == ['a', 'b', 'c']
 

@@ -7,7 +7,7 @@ import sys
 import time
 import threading
 
-from . import node_types
+from . import nodes
 from . import zookeeper
 
 
@@ -17,7 +17,7 @@ class Conveyor(object):
     def __init__(self, servers='localhost:2181/conveyor', timeout=10, host_id=None, groups=[], app_handler=None):
         """Establish ZooKeeper session"""
 
-        self.host = node_types.Host(id=host_id, data={'groups':groups})
+        self.host = nodes.Host(path=zookeeper.path_join('hosts', host_id), data={'groups':groups})
 
         if callable(app_handler):
             self.app_handler = app_handler(self.host)
@@ -63,7 +63,7 @@ class Conveyor(object):
                 self.cv.acquire()
                 logging.getLogger().info('Connected with session ID: %x', zookeeper.client_id(handle)[0])
 
-                if hasattr(self, 'host'):
+                if len(zookeeper.path_split(self.host.path)) > 1:
                     self.host.write(handle=self.handle)
 
                 if hasattr(self, 'app_handler'):
@@ -79,16 +79,18 @@ class Conveyor(object):
     def __call_app_root_handler(self):
         """Call application handler on all application nodes"""
 
+        path = zookeeper.path_join('applications')
+
         while True:
             try:
-                for id in node_types.Application.list(handle=self.handle, watcher=self.__app_root_watcher):
-                    self.__call_app_handler(id=id)
+                for name in nodes.list(handle=self.handle, path=path, watcher=self.__app_root_watcher):
+                    self.__call_app_handler(path=zookeeper.path_join('applications', name))
                 break
             except zookeeper.NoNodeException:
                 try:
-                    zookeeper.create_r(self.handle, node_types.Application.get_path(), '', [zookeeper.ZOO_OPEN_ACL_UNSAFE], zookeeper.PERSISTENT)
+                    nodes.PersistentNode(path=path).write(handle=self.handle)
                 except zookeeper.NodeExistsException:
-                    pass # another node must have already created it
+                    pass # another host must have already created this node
 
     def __app_root_watcher(self, handle, type, state, path):
         """Handle application node additions/deletions"""
@@ -96,40 +98,40 @@ class Conveyor(object):
         logging.getLogger().debug('Application change detected: type=%s, state=%s, path=%s', type, state, path)
         self.__call_app_root_handler()
 
-    def __call_app_handler(self, id):
+    def __call_app_handler(self, path):
         """Call app handler as necessary"""
 
-        application = node_types.Application.read(handle=self.handle, id=id)
+        application = nodes.Application.read(handle=self.handle, path=path)
         if application.in_groups(self.host.data['groups']):
-            deployment_slot_id = zookeeper.path_join([application.id, self.host.id])
             app_handler_action = self.app_handler.get_action(application)
             if callable(app_handler_action):
+
+                path = zookeeper.path_join('applications', application.data['name'], self.host.data['name'])
 
                 tries = 0
                 while True:
                     tries += 1
                     try:
-                        node_types.DeploymentSlot(id=deployment_slot_id).occupy(handle=self.handle)
+                        nodes.DeploymentSlot(path=path).occupy(handle=self.handle)
                         logging.getLogger().debug('Calling application handler: %s.%s()', self.app_handler.__class__, app_handler_action.__name__)
                         result = app_handler_action(application)
                         logging.getLogger().info('Application handler returned: %s', result)
-                        node_types.DeploymentSlot.free(handle=self.handle, id=deployment_slot_id, app_handler_result=result)
+                        nodes.DeploymentSlot.free(handle=self.handle, path=path, app_handler_result=result)
                         break
 
-                    except node_types.Application.DeploymentSlotOverflow:
+                    except nodes.Application.DeploymentSlotOverflow:
                         logging.getLogger().debug('Waiting for free slot')
                         time.sleep(1)
 
-        if id not in self.app_watchers:
-            self.app_watchers.add(application.id)
-            zookeeper.exists(self.handle, node_types.Application.get_path(id=application.id), self.__app_watcher)
+        if path not in self.app_watchers:
+            self.app_watchers.add(path)
+            zookeeper.exists(self.handle, zookeeper.path_join('applications', application.data['name']), self.__app_watcher)
 
     def __app_watcher(self, handle, type, state, path):
         """Handle application node changes"""
 
-        id = zookeeper.path_split(path)[-1]
-        self.app_watchers.discard(id)
+        self.app_watchers.discard(path)
         if zookeeper.exists(self.handle, path):
             logging.getLogger().debug('Application change detected: type=%s, state=%s, path=%s', type, state, path)
-            self.__call_app_handler(id=id)
+            self.__call_app_handler(path=path)
 
