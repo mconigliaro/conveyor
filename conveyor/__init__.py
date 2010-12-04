@@ -19,9 +19,10 @@ class Conveyor(object):
 
         self.host = nodes.Host(path=zookeeper.path_join('hosts', host_id), data={'groups':groups})
 
-        if callable(app_handler):
+        try:
             self.app_handler = app_handler(self.host)
-        else:
+        except Exception, e:
+            logging.getLogger().exception(e)
             logging.getLogger().debug('Application handler is NOT callable: %s', app_handler)
 
         self.conn_state = None

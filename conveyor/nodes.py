@@ -9,7 +9,7 @@ from . import zookeeper
 
 
 def list(handle, path, watcher=None):
-    """Return a sorted list of child nodes from the specified path"""
+    """Return a sorted list of child nodes from ZooKeeper"""
 
     result = sorted(zookeeper.get_children(handle, path, watcher))
     logging.getLogger().debug('Listing children of %s: %s ', path, ', '.join(result))

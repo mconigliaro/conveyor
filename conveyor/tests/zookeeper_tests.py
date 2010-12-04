@@ -21,3 +21,7 @@ def test_zookeeper():
     conveyor.zookeeper.create_r(handle=client.handle, path='/a/b/c', data='test data')
 
     conveyor.zookeeper.delete_r(handle=client.handle, path='/a')
+
+
+def teardown():
+    client.close()
