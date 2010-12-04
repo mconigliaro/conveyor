@@ -106,17 +106,17 @@ class Conveyor(object):
             app_handler_action = self.app_handler.get_action(application)
             if callable(app_handler_action):
 
-                path = zookeeper.path_join('applications', application.data['name'], self.host.data['name'])
+                slot_path = zookeeper.path_join('applications', application.id, self.host.id)
 
                 tries = 0
                 while True:
                     tries += 1
                     try:
-                        nodes.DeploymentSlot(path=path).occupy(handle=self.handle)
+                        nodes.DeploymentSlot(path=slot_path).occupy(handle=self.handle)
                         logging.getLogger().debug('Calling application handler: %s.%s()', self.app_handler.__class__, app_handler_action.__name__)
                         result = app_handler_action(application)
                         logging.getLogger().info('Application handler returned: %s', result)
-                        nodes.DeploymentSlot.free(handle=self.handle, path=path, app_handler_result=result)
+                        nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, app_handler_result=result)
                         break
 
                     except nodes.Application.DeploymentSlotOverflow:
@@ -125,7 +125,7 @@ class Conveyor(object):
 
         if path not in self.app_watchers:
             self.app_watchers.add(path)
-            zookeeper.exists(self.handle, zookeeper.path_join('applications', application.data['name']), self.__app_watcher)
+            zookeeper.exists(self.handle, application.path, self.__app_watcher)
 
     def __app_watcher(self, handle, type, state, path):
         """Handle application node changes"""

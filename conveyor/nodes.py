@@ -128,8 +128,9 @@ class Host(EphemeralNode):
 
     def __init__(self, path, data={}, attrs={}):
 
+        self.id = zookeeper.path_split(path)[-1]
+
         data = {
-            'name': zookeeper.path_split(path)[-1],
             'groups': data.get('groups', [])
         }
 
@@ -144,8 +145,9 @@ class Application(PersistentNode):
 
     def __init__(self, path, data={}, attrs={}):
 
+        self.id = zookeeper.path_split(path)[-1]
+
         data = {
-            'name': zookeeper.path_split(path)[-1],
             'groups': data.get('groups', []),
             'version': data.get('version', '0.0'),
             'deployment_slot_increment': data.get('deployment_slot_increment', 1),
@@ -174,6 +176,8 @@ class DeploymentSlot(EphemeralNode):
     """Deployment slot node class"""
 
     def __init__(self, path, data={}, attrs={}):
+
+        self.id = zookeeper.path_join(*zookeeper.path_split(path)[-2:])
 
         super(DeploymentSlot, self).__init__(path=path, data=data, attrs=attrs)
 
