@@ -84,8 +84,8 @@ class Conveyor(object):
             except zookeeper.NoNodeException:
                 try:
                     nodes.PersistentNode(path=path).write(handle=self.handle)
-                except zookeeper.NodeExistsException:
-                    pass # another host must have already created this node
+                except zookeeper.NodeExistsException: # another host must have created this node already
+                    pass
 
     def __app_root_watcher(self, handle, type, state, path):
         """Handle application node additions/deletions"""
@@ -96,13 +96,16 @@ class Conveyor(object):
     def __try_deploy(self, path):
         """Deploy applications as necessary"""
 
-        application = nodes.Application.read(handle=self.handle, path=path)
+        try:
+            application = nodes.Application.read(handle=self.handle, path=path)
+        except zookeeper.NoNodeException: # another host must have deleted this node already
+            application = nodes.Application(path=path)
+
         if application.in_groups(self.host.data['groups']):
 
             try:
                 lversion = application.run_command(self.get_version_cmd)
-            except Exception, e:
-                logging.getLogger().exception(e)
+            except application.CommandError:
                 lversion = '0'
 
             if lversion != application.data['version']:

@@ -143,6 +143,9 @@ class Application(PersistentNode):
     class DeploymentSlotOverflow(Exception):
         """Exception raised on deployment slot overflow"""
 
+    class CommandError(Exception):
+        """Exception raised on command error"""
+
     def __init__(self, path, data={}, attrs={}):
 
         self.id = zookeeper.path_split(path)[-1]
@@ -152,8 +155,8 @@ class Application(PersistentNode):
             'version': data.get('version', '0'),
             'deployment_slot_increment': data.get('deployment_slot_increment', 1),
             'deployment_slots': data.get('deployment_slots', 1),
-            'deployment_completed': data.get('deployment_completed', 0),
-            'deployment_failed': data.get('deployment_failed', 0)
+            'deployment_completed': data.get('deployment_completed', []),
+            'deployment_failed': data.get('deployment_failed', [])
         }
 
         super(Application, self).__init__(path=path, data=data, attrs=attrs)
@@ -173,10 +176,12 @@ class Application(PersistentNode):
         logging.getLogger().info('Running command: %s', command)
         p = subprocess.Popen(command, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
         result = p.communicate()[0].strip()
-        logging.getLogger().info('Command result: %s (%d)', result, p.returncode)
 
         if p.returncode:
-            raise StandardError, "Error running command: %s" % command
+            logging.getLogger().error('Command result: %s (%d)', result, p.returncode)
+            raise Application.CommandError
+        else:
+            logging.getLogger().info('Command result: %s (%d)', result, p.returncode)
 
         return result
 
@@ -207,7 +212,7 @@ class Application(PersistentNode):
 
             return str(result)
 
-        return re.sub('%\((.*?)\)s', get_attr, re.sub('%\(data\[(.*?)]\)s', get_data, command))
+        return re.sub('%(\S+)', get_attr, re.sub('%data\[(\S+)]', get_data, command))
 
 
 class DeploymentSlot(EphemeralNode):
@@ -245,14 +250,16 @@ class DeploymentSlot(EphemeralNode):
 
         delete(handle=handle, path=path)
 
+        host_id = zookeeper.path_split(path)[-1]
+
         while True:
             try:
                 app = Application.read(handle=handle, path=zookeeper.get_parent_node(path))
 
                 if deploy_result:
-                    app.data['deployment_completed'] += 1
+                    app.data['deployment_completed'].extend([host_id])
                 else:
-                    app.data['deployment_failed'] += 1
+                    app.data['deployment_failed'].extend([host_id])
                 app.data['deployment_slots'] += app.data['deployment_slot_increment']
 
                 app.write(handle=handle, overwrite_if_version=app.version)

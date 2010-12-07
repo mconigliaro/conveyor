@@ -3,11 +3,13 @@
 
 from __future__ import absolute_import
 
+import ConfigParser
 import optparse
 import os
 import re
 import string
 import sys
+import traceback
 
 if string.find(os.path.abspath(sys.argv[0]), os.sep+'conveyor') != -1:
     sys.path.insert(0, os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]), os.pardir, os.pardir)))
@@ -17,71 +19,80 @@ if hasattr(os, "getuid") and os.getuid() != 0:
 import conveyor
 
 
-op = optparse.OptionParser("usage: %prog [options] <name>")
+config = ConfigParser.SafeConfigParser(defaults={
+    'servers': 'localhost:2181/conveyor',
+    'timeout': '10'
+})
+config.read([os.path.join(sys.path[0], './conf/hoist.conf'), '/etc/conveyor/hoist.conf'])
+
+
+op = optparse.OptionParser("usage: %prog [options] [ create <name> <version> | delete <name> | list | get <name> ]")
 
 og = optparse.OptionGroup(op, 'Session Options')
 og.add_option('--servers',
               dest='servers',
+              default=config.get('session', 'servers'),
               help="zookeeper connection string (default: %default)")
 og.add_option('--timeout',
               dest='timeout',
               type='int',
+              default=config.getint('session', 'timeout'),
               help="zookeeper connection timeout (default: %default)")
 op.add_option_group(og)
 
 og = optparse.OptionGroup(op, 'Application Options')
-og.add_option('--action',
-              dest='action',
-              type='choice',
-              choices=['create', 'delete', 'list', 'get'],
-              help="action (default: %default)")
-og.add_option('--version',
-              dest='version',
-              help="application version (default: %default)")
 og.add_option('--groups',
               dest='groups',
+              default='',
               help="comma-separated list of groups")
 og.add_option('--deployment-slots',
               dest='deployment_slots',
               type='int',
+              default=1,
               help="deployment slots (default: %default)")
 og.add_option('--deployment-slot-increment',
               dest='deployment_slot_increment',
               type='int',
+              default=1,
               help="deployment increment (default: %default)")
 op.add_option_group(og)
 
-op.set_defaults(servers = 'localhost:2181/conveyor',
-                timeout = 10,
-                action = 'create',
-                groups = '',
-                version = '0',
-                deployment_slots = '1',
-                deployment_slot_increment = '1')
-
-
 (options, args) = op.parse_args()
 options.groups = list(set(map(string.strip, options.groups.split(',')))) # remove duplicate groups
-if len(args) < 1:
-    op.print_usage()
-    sys.exit()
 
 
-client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout)
+try:
+    client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout)
 
-if options.action == 'create':
-    data = {
-        'name': args[0],
-        'version':options.version,
-        'groups':options.groups,
-        'deployment_slots':options.deployment_slots,
-        'deployment_slot_increment':options.deployment_slot_increment
-    }
-    path = conveyor.zookeeper.path_join('applications', args[0])
-    print "%s (%s)" % (path, conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
-elif options.action == 'delete':
-    print conveyor.nodes.delete(handle=client.handle, path=conveyor.zookeeper.path_join('applications', args[0]))
-elif options.action == 'list':
-    print map(lambda app: conveyor.zookeeper.path_split(app.path)[-1], conveyor.nodes.Application.read_all(handle=client.handle, path=conveyor.zookeeper.path_join('applications'), groups=options.groups))
-elif options.action == 'get':
-    print conveyor.nodes.Application.read(handle=client.handle, path=conveyor.zookeeper.path_join('applications', args[0])).data
+    if args[0] == 'create' and len(args) == 3:
+        data = {
+            'name': args[1],
+            'version': args[2],
+            'groups': options.groups,
+            'deployment_slots': options.deployment_slots,
+            'deployment_slot_increment': options.deployment_slot_increment
+        }
+        path = conveyor.zookeeper.path_join('applications', args[1])
+        print "Created %s (%s)" % (path, conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
+
+    elif args[0] == 'delete' and len(args) == 2:
+        path = conveyor.zookeeper.path_join('applications', args[1])
+        conveyor.nodes.delete(handle=client.handle, path=path)
+        print "Deleted %s" % path
+
+    elif args[0] == 'list' and len(args) == 1:
+        print map(lambda app: conveyor.zookeeper.path_split(app.path)[-1], conveyor.nodes.Application.read_all(handle=client.handle, path=conveyor.zookeeper.path_join('applications'), groups=options.groups))
+
+    elif args[0] == 'get' and len(args) == 2:
+        print conveyor.nodes.Application.read(handle=client.handle, path=conveyor.zookeeper.path_join('applications', args[1])).data
+
+    else:
+        op.print_help()
+        sys.exit(1)
+
+except SystemExit:
+    sys.exit(1)
+
+except:
+    traceback.print_exc()
+    sys.exit(1)
