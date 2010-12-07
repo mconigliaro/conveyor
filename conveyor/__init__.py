@@ -78,7 +78,7 @@ class Conveyor(object):
 
         while True:
             try:
-                for name in nodes.list(handle=self.handle, path=path, watcher=self.__app_root_watcher):
+                for name in nodes.list_children(handle=self.handle, path=path, watcher=self.__app_root_watcher):
                     self.__try_deploy(path=zookeeper.path_join('applications', name))
                 break
             except zookeeper.NoNodeException:
@@ -101,7 +101,7 @@ class Conveyor(object):
         except zookeeper.NoNodeException: # another host must have deleted this node already
             application = nodes.Application(path=path)
 
-        if application.in_groups(self.host.data['groups']):
+        if application.in_groups(self.host.data['groups']) and not application.deployment_failed(self.host.id):
 
             try:
                 lversion = application.run_command(self.get_version_cmd)
@@ -116,12 +116,11 @@ class Conveyor(object):
                         try:
                             application.run_command(self.deploy_cmd)
                             result = True
-                        except Exception, e:
-                            logging.getLogger().exception(e)
+                        except application.CommandError:
                             result = False
+
                         nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, deploy_result=result)
                         break
-
                     except nodes.Application.DeploymentSlotOverflow:
                         logging.getLogger().debug('Waiting for free slot')
                         time.sleep(1)

@@ -31,7 +31,7 @@ def test_conveyor():
 
     assert len(conveyor.nodes.Application.read_all(handle=client.handle, path=conveyor.zookeeper.path_join('applications'), groups=['test_group0'])) == 2
 
-    assert len(conveyor.nodes.list(handle=client.handle, path=conveyor.zookeeper.path_join('applications'))) == 3
+    assert len(conveyor.nodes.list_children(handle=client.handle, path=conveyor.zookeeper.path_join('applications'))) == 3
 
     conveyor.nodes.DeploymentSlot(path=conveyor.zookeeper.path_join('applications', 'test_app0', 'test_client')).occupy(handle=client.handle)
     conveyor.nodes.DeploymentSlot.free(handle=client.handle, path=conveyor.zookeeper.path_join('applications', 'test_app0', 'test_client'), deploy_result=True)

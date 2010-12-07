@@ -8,7 +8,7 @@ import subprocess
 from . import zookeeper
 
 
-def list(handle, path, watcher=None):
+def list_children(handle, path, watcher=None):
     """Return a sorted list of child nodes from ZooKeeper"""
 
     result = sorted(zookeeper.get_children(handle, path, watcher))
@@ -60,8 +60,6 @@ class Node(object):
             if len(groups) > 0:
                 if node.in_groups(groups):
                     nodes.append(node)
-                else:
-                    logging.getLogger().debug('Node is not in my group(s) (ignoring): %s', name)
             else:
                 nodes.append(node)
 
@@ -70,9 +68,14 @@ class Node(object):
     def in_groups(self, groups):
         """Return true if the node belongs to any of the specified groups"""
 
-        result = False
-        if set(groups) & set(self.data['groups']):
+        intersection = list(set(groups) & set(self.data['groups']))
+        logging.getLogger().debug('Intersection between groups %s and %s: %s', groups, self.data['groups'], intersection)
+
+        if intersection:
             result = True
+        else:
+            result = False
+
         return result
 
     def write(self, handle, acl, flags, overwrite=True, overwrite_if_version=None):
@@ -165,23 +168,35 @@ class Application(PersistentNode):
         """Return True on deployment slot overflow"""
 
         result = False
-        if len(list(handle=handle, path=self.path)) > self.data['deployment_slots']:
+        if len(list_children(handle=handle, path=self.path)) > self.data['deployment_slots']:
             result = True
+        return result
+
+    def deployment_failed(self, host_id):
+        """Return True if a deployment of this application failed previously"""
+
+        if host_id in self.data['deployment_failed']:
+            logging.getLogger().debug('Deployment of %s has already failed on host %s', self.id, host_id)
+            result = True
+        else:
+            logging.getLogger().debug('Deployment of %s has NEVER failed on host %s', self.id, host_id)
+            result = False
+
         return result
 
     def run_command(self, command):
         """Run a command using this node's data/attributes"""
 
         command = self.__interpolate(command)
-        logging.getLogger().info('Running command: %s', command)
+        logging.getLogger().debug('Running command: %s', command)
         p = subprocess.Popen(command, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
         result = p.communicate()[0].strip()
 
         if p.returncode:
-            logging.getLogger().error('Command result: %s (%d)', result, p.returncode)
+            logging.getLogger().warn('Command result: %s (%d)', result, p.returncode)
             raise Application.CommandError
         else:
-            logging.getLogger().info('Command result: %s (%d)', result, p.returncode)
+            logging.getLogger().debug('Command result: %s (%d)', result, p.returncode)
 
         return result
 
@@ -192,27 +207,23 @@ class Application(PersistentNode):
             """Return an attribute value"""
 
             item = match_obj.group(1)
-
             if hasattr(self, item):
                 result = getattr(self, item)
             else:
                 result = ''
-
             return str(result)
 
         def get_data(match_obj):
             """Return a data value"""
 
             item = match_obj.group(1)
-
             if item in self.data:
                 result = self.data[item]
             else:
                 result = ''
-
             return str(result)
 
-        return re.sub('%(\S+)', get_attr, re.sub('%data\[(\S+)]', get_data, command))
+        return re.sub('%\((.+?)\)s', get_attr, re.sub('%\(data\[(.+?)]\)s', get_data, command))
 
 
 class DeploymentSlot(EphemeralNode):
@@ -257,9 +268,14 @@ class DeploymentSlot(EphemeralNode):
                 app = Application.read(handle=handle, path=zookeeper.get_parent_node(path))
 
                 if deploy_result:
-                    app.data['deployment_completed'].extend([host_id])
+                    logging.getLogger().info('Deployment of %s %s succeeded', app.id, app.data['version'])
+                    if host_id not in app.data['deployment_completed']:
+                        app.data['deployment_completed'].extend([host_id])
                 else:
-                    app.data['deployment_failed'].extend([host_id])
+                    logging.getLogger().error('Deployment of %s %s failed', app.id, app.data['version'])
+                    if host_id not in app.data['deployment_failed']:
+                        app.data['deployment_failed'].extend([host_id])
+
                 app.data['deployment_slots'] += app.data['deployment_slot_increment']
 
                 app.write(handle=handle, overwrite_if_version=app.version)

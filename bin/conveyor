@@ -101,7 +101,7 @@ options.groups = list(set(map(string.strip, options.groups.split(',')))) # remov
 
 logging.getLogger().setLevel(getattr(logging, options.log_level.upper()))
 console_logger = logging.StreamHandler()
-console_logger.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+console_logger.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
 logging.getLogger().addHandler(console_logger)
 if options.log_file_path:
     fileLogger = logging.handlers.TimedRotatingFileHandler(
