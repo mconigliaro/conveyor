@@ -8,7 +8,7 @@ apps = []
 def setup():
     global client, apps
 
-    client = conveyor.Conveyor(groups=['test_group0'], app_handler=None)
+    client = conveyor.Conveyor(groups=['test_group0'])
 
     try:
         conveyor.zookeeper.delete_r(handle=client.handle, path=conveyor.zookeeper.path_join('applications'))
@@ -34,7 +34,7 @@ def test_conveyor():
     assert len(conveyor.nodes.list(handle=client.handle, path=conveyor.zookeeper.path_join('applications'))) == 3
 
     conveyor.nodes.DeploymentSlot(path=conveyor.zookeeper.path_join('applications', 'test_app0', 'test_client')).occupy(handle=client.handle)
-    conveyor.nodes.DeploymentSlot.free(handle=client.handle, path=conveyor.zookeeper.path_join('applications', 'test_app0', 'test_client'), app_handler_result=True)
+    conveyor.nodes.DeploymentSlot.free(handle=client.handle, path=conveyor.zookeeper.path_join('applications', 'test_app0', 'test_client'), deploy_result=True)
 
     for app in apps:
         conveyor.nodes.delete(handle=client.handle, path=app.path)

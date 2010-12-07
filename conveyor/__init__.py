@@ -1,9 +1,6 @@
 from __future__ import absolute_import
 
-import json
 import logging
-import os
-import sys
 import time
 import threading
 
@@ -14,16 +11,13 @@ from . import zookeeper
 class Conveyor(object):
     """The main conveyor class"""
 
-    def __init__(self, servers='localhost:2181/conveyor', timeout=10, host_id=None, groups=[], app_handler=None):
+    def __init__(self, servers='localhost:2181/conveyor', timeout=10, host_id=None, groups=[], get_version_cmd=None, deploy_cmd=None):
         """Establish ZooKeeper session"""
 
         self.host = nodes.Host(path=zookeeper.path_join('hosts', host_id), data={'groups':groups})
 
-        try:
-            self.app_handler = app_handler(self.host)
-        except Exception, e:
-            logging.getLogger().exception(e)
-            logging.getLogger().debug('Application handler is NOT callable: %s', app_handler)
+        self.get_version_cmd = get_version_cmd
+        self.deploy_cmd = deploy_cmd
 
         self.conn_state = None
         self.handle = None
@@ -67,7 +61,7 @@ class Conveyor(object):
                 if len(zookeeper.path_split(self.host.path)) > 1:
                     self.host.write(handle=self.handle)
 
-                if hasattr(self, 'app_handler'):
+                if self.get_version_cmd and self.deploy_cmd:
                     self.__call_app_root_handler()
 
             except Exception, e:
@@ -78,14 +72,14 @@ class Conveyor(object):
                 self.cv.release()
 
     def __call_app_root_handler(self):
-        """Call application handler on all application nodes"""
+        """Call __try_deploy on all application nodes"""
 
         path = zookeeper.path_join('applications')
 
         while True:
             try:
                 for name in nodes.list(handle=self.handle, path=path, watcher=self.__app_root_watcher):
-                    self.__call_app_handler(path=zookeeper.path_join('applications', name))
+                    self.__try_deploy(path=zookeeper.path_join('applications', name))
                 break
             except zookeeper.NoNodeException:
                 try:
@@ -99,37 +93,30 @@ class Conveyor(object):
         logging.getLogger().debug('Application change detected: type=%s, state=%s, path=%s', type, state, path)
         self.__call_app_root_handler()
 
-    def __call_app_handler(self, path):
-        """Call app handler as necessary"""
+    def __try_deploy(self, path):
+        """Deploy applications as necessary"""
 
         application = nodes.Application.read(handle=self.handle, path=path)
         if application.in_groups(self.host.data['groups']):
 
             try:
-                app_handler_action = False
-                app_handler_action = self.app_handler.get_action(application)
+                lversion = application.run_command(self.get_version_cmd)
             except Exception, e:
                 logging.getLogger().exception(e)
+                lversion = '0'
 
-            if callable(app_handler_action):
-
+            if lversion != application.data['version']:
                 slot_path = zookeeper.path_join('applications', application.id, self.host.id)
-
-                tries = 0
                 while True:
-                    tries += 1
                     try:
                         nodes.DeploymentSlot(path=slot_path).occupy(handle=self.handle)
-                        logging.getLogger().debug('Calling application handler: %s.%s()', self.app_handler.__class__, app_handler_action.__name__)
-
                         try:
-                            result = False
-                            result = app_handler_action(application)
+                            application.run_command(self.deploy_cmd)
+                            result = True
                         except Exception, e:
                             logging.getLogger().exception(e)
-
-                        logging.getLogger().info('Application handler returned: %s', result)
-                        nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, app_handler_result=result)
+                            result = False
+                        nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, deploy_result=result)
                         break
 
                     except nodes.Application.DeploymentSlotOverflow:
@@ -146,5 +133,5 @@ class Conveyor(object):
         self.app_watchers.discard(path)
         if zookeeper.exists(self.handle, path):
             logging.getLogger().debug('Application change detected: type=%s, state=%s, path=%s', type, state, path)
-            self.__call_app_handler(path=path)
+            self.__try_deploy(path=path)
 

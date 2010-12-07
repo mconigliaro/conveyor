@@ -3,13 +3,11 @@
 
 from __future__ import absolute_import
 
-import logging
 import optparse
 import os
 import re
 import string
 import sys
-import time
 
 if string.find(os.path.abspath(sys.argv[0]), os.sep+'conveyor') != -1:
     sys.path.insert(0, os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]), os.pardir, os.pardir)))
@@ -19,7 +17,7 @@ if hasattr(os, "getuid") and os.getuid() != 0:
 import conveyor
 
 
-op = optparse.OptionParser("usage: %prog [options]")
+op = optparse.OptionParser("usage: %prog [options] <name>")
 
 og = optparse.OptionGroup(op, 'Session Options')
 og.add_option('--servers',
@@ -29,9 +27,6 @@ og.add_option('--timeout',
               dest='timeout',
               type='int',
               help="zookeeper connection timeout (default: %default)")
-og.add_option('--groups',
-              dest='groups',
-              help="comma-separated list of groups")
 op.add_option_group(og)
 
 og = optparse.OptionGroup(op, 'Application Options')
@@ -40,15 +35,12 @@ og.add_option('--action',
               type='choice',
               choices=['create', 'delete', 'list', 'get'],
               help="action (default: %default)")
-og.add_option('--application-id',
-              dest='application_id',
-              help="application id")
-og.add_option('--application-version',
-              dest='application_version',
+og.add_option('--version',
+              dest='version',
               help="application version (default: %default)")
-op.add_option_group(og)
-
-og = optparse.OptionGroup(op, 'Deployment Options')
+og.add_option('--groups',
+              dest='groups',
+              help="comma-separated list of groups")
 og.add_option('--deployment-slots',
               dest='deployment_slots',
               type='int',
@@ -61,35 +53,35 @@ op.add_option_group(og)
 
 op.set_defaults(servers = 'localhost:2181/conveyor',
                 timeout = 10,
-                groups = [],
                 action = 'create',
-                application_version = '0.0',
+                groups = '',
+                version = '0',
                 deployment_slots = '1',
                 deployment_slot_increment = '1')
 
+
 (options, args) = op.parse_args()
-if len(options.groups) > 0:
-    groups = []
-    for group in options.groups.split(','):
-        groups.append(group.strip())
-    options.groups = list(set(groups)) # remove duplicate groups
+options.groups = list(set(map(string.strip, options.groups.split(',')))) # remove duplicate groups
+if len(args) < 1:
+    op.print_usage()
+    sys.exit()
 
 
-client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout, groups=options.groups)
+client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout)
 
 if options.action == 'create':
     data = {
-        'name': options.application_id,
+        'name': args[0],
+        'version':options.version,
         'groups':options.groups,
-        'version':options.application_version,
         'deployment_slots':options.deployment_slots,
         'deployment_slot_increment':options.deployment_slot_increment
     }
-    path = conveyor.zookeeper.path_join('applications', options.application_id)
+    path = conveyor.zookeeper.path_join('applications', args[0])
     print "%s (%s)" % (path, conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
 elif options.action == 'delete':
-    print conveyor.nodes.delete(handle=client.handle, path=conveyor.zookeeper.path_join('applications', options.application_id))
+    print conveyor.nodes.delete(handle=client.handle, path=conveyor.zookeeper.path_join('applications', args[0]))
 elif options.action == 'list':
     print map(lambda app: conveyor.zookeeper.path_split(app.path)[-1], conveyor.nodes.Application.read_all(handle=client.handle, path=conveyor.zookeeper.path_join('applications'), groups=options.groups))
 elif options.action == 'get':
-    print conveyor.nodes.Application.read(handle=client.handle, path=conveyor.zookeeper.path_join('applications', options.application_id)).data
+    print conveyor.nodes.Application.read(handle=client.handle, path=conveyor.zookeeper.path_join('applications', args[0])).data

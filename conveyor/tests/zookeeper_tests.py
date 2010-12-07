@@ -7,7 +7,7 @@ client = None
 def setup():
     global client
 
-    client = conveyor.Conveyor(app_handler=None)
+    client = conveyor.Conveyor()
 
 
 def test_zookeeper():

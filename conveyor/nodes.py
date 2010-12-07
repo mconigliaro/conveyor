@@ -1,9 +1,9 @@
 from __future__ import absolute_import
 
-from distutils import version
 import json
 import logging
 import re
+import subprocess
 
 from . import zookeeper
 
@@ -149,17 +149,12 @@ class Application(PersistentNode):
 
         data = {
             'groups': data.get('groups', []),
-            'version': data.get('version', '0.0'),
+            'version': data.get('version', '0'),
             'deployment_slot_increment': data.get('deployment_slot_increment', 1),
             'deployment_slots': data.get('deployment_slots', 1),
             'deployment_completed': data.get('deployment_completed', 0),
             'deployment_failed': data.get('deployment_failed', 0)
         }
-
-        try:
-            data['version'] = str(version.StrictVersion(str(data['version'])))
-        except ValueError:
-            data['version'] = '0.0'
 
         super(Application, self).__init__(path=path, data=data, attrs=attrs)
 
@@ -170,6 +165,49 @@ class Application(PersistentNode):
         if len(list(handle=handle, path=self.path)) > self.data['deployment_slots']:
             result = True
         return result
+
+    def run_command(self, command):
+        """Run a command using this node's data/attributes"""
+
+        command = self.__interpolate(command)
+        logging.getLogger().info('Running command: %s', command)
+        p = subprocess.Popen(command, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+        result = p.communicate()[0].strip()
+        logging.getLogger().info('Command result: %s (%d)', result, p.returncode)
+
+        if p.returncode:
+            raise StandardError, "Error running command: %s" % command
+
+        return result
+
+    def __interpolate(self, command):
+        """Do variable interpolation on a string using this node's data"""
+
+        def get_attr(match_obj):
+            """Return an attribute value"""
+
+            item = match_obj.group(1)
+
+            if hasattr(self, item):
+                result = getattr(self, item)
+            else:
+                result = ''
+
+            return str(result)
+
+        def get_data(match_obj):
+            """Return a data value"""
+
+            item = match_obj.group(1)
+
+            if item in self.data:
+                result = self.data[item]
+            else:
+                result = ''
+
+            return str(result)
+
+        return re.sub('%\((.*?)\)s', get_attr, re.sub('%\(data\[(.*?)]\)s', get_data, command))
 
 
 class DeploymentSlot(EphemeralNode):
@@ -202,7 +240,7 @@ class DeploymentSlot(EphemeralNode):
                 logging.getLogger().debug('Version mismatch (retrying)')
 
     @classmethod
-    def free(self, handle, path, app_handler_result):
+    def free(self, handle, path, deploy_result):
         """Free up a deployment slot"""
 
         delete(handle=handle, path=path)
@@ -211,7 +249,7 @@ class DeploymentSlot(EphemeralNode):
             try:
                 app = Application.read(handle=handle, path=zookeeper.get_parent_node(path))
 
-                if app_handler_result:
+                if deploy_result:
                     app.data['deployment_completed'] += 1
                 else:
                     app.data['deployment_failed'] += 1

@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import
 
+import ConfigParser
 import logging
 import optparse
 import os
@@ -17,7 +18,20 @@ if hasattr(os, "getuid") and os.getuid() != 0:
     sys.path.insert(0, os.path.abspath(os.getcwd()))
 
 import conveyor
-import conveyor.app_handlers
+
+
+config = ConfigParser.SafeConfigParser(defaults={
+    'servers': 'localhost:2181/conveyor',
+    'timeout': '10',
+    'host-id': socket.getfqdn(),
+    'groups': '',
+    'log-level': 'info',
+    'log-file-path': '',
+    'log-file-rotate-interval-type': 'd',
+    'log-file-rotate-interval': '7',
+    'log-file-max-backups': '4'
+})
+config.read([os.path.join(sys.path[0], './conf/conveyor.conf'), '/etc/conveyor/conveyor.conf'])
 
 
 op = optparse.OptionParser("usage: %prog [options]")
@@ -25,17 +39,32 @@ op = optparse.OptionParser("usage: %prog [options]")
 og = optparse.OptionGroup(op, 'Session Options')
 og.add_option('--servers',
               dest='servers',
+              default=config.get('session', 'servers'),
               help="zookeeper connection string (default: %default)")
 og.add_option('--timeout',
               dest='timeout',
               type='int',
+              default=config.getint('session', 'timeout'),
               help="zookeeper connection timeout (default: %default)")
 og.add_option('--host-id',
               dest='host_id',
+              default=config.get('session', 'host-id'),
               help="host id (default: %default)")
 og.add_option('--groups',
               dest='groups',
+              default=config.get('session', 'groups'),
               help="comma-separated list of groups")
+op.add_option_group(og)
+
+og = optparse.OptionGroup(op, 'Deployment Options')
+og.add_option('--get-version-cmd',
+              dest='get_version_cmd',
+              default=config.get('deployment', 'get-version-cmd', raw=True),
+              help="command to get version (default: %default)")
+og.add_option('--deploy-cmd',
+              dest='deploy_cmd',
+              default=config.get('deployment', 'deploy-cmd', raw=True),
+              help="deployment command (default: %default)")
 op.add_option_group(og)
 
 og = optparse.OptionGroup(op, 'Output and Logging Options')
@@ -43,6 +72,7 @@ og.add_option('--log-level',
               dest='log_level',
               type='choice',
               choices=['critical', 'error', 'warning', 'info', 'debug'],
+              default=config.get('logging', 'log-level'),
               help="critical, error, warning, info, debug (default: %default)")
 og.add_option('--log-file-path',
               dest='log_file_path',
@@ -51,32 +81,22 @@ og.add_option('--log-file-rotate-interval-type',
               dest='log_file_rotate_interval_type',
               type='choice',
               choices=['s', 'm', 'h', 'd', 'w', 'midnight'],
+              default=config.get('logging', 'log-file-rotate-interval-type'),
               help="s=seconds, m=minutes, h=hours, d=days, w=week day (0=monday), midnight (default: %default)")
 og.add_option('--log-file-rotate-interval',
               dest='log_file_rotate_interval',
               type='int',
+              default=config.getint('logging', 'log-file-rotate-interval'),
               help="log rotation interval (default: %default)")
 og.add_option('--log-file-max-backups',
               dest='log_file_max_backups',
               type='int',
+              default=config.getint('logging', 'log-file-max-backups'),
               help="number of log files to keep when rotating (default: %default)")
 op.add_option_group(og)
 
-op.set_defaults(servers = 'localhost:2181/conveyor',
-                timeout = 10,
-                host_id = socket.getfqdn(),
-                groups = [],
-                log_level = 'info',
-                log_file_rotate_interval_type = 'd',
-                log_file_rotate_interval = 7,
-                log_file_max_backups = 4)
-
 (options, args) = op.parse_args()
-if len(options.groups) > 0:
-    groups = []
-    for group in options.groups.split(','):
-        groups.append(group.strip())
-    options.groups = list(set(groups)) # remove duplicate groups
+options.groups = list(set(map(string.strip, options.groups.split(',')))) # remove duplicate groups
 
 
 logging.getLogger().setLevel(getattr(logging, options.log_level.upper()))
@@ -94,7 +114,7 @@ if options.log_file_path:
 
 
 try:
-    client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout, host_id=options.host_id, groups=options.groups, app_handler=conveyor.app_handlers.Default)
+    client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout, host_id=options.host_id, groups=options.groups, get_version_cmd=options.get_version_cmd, deploy_cmd=options.deploy_cmd)
     while True:
         time.sleep(1)
 
