@@ -110,13 +110,13 @@ class Conveyor(object):
 
             slot_path = zookeeper.path_join('applications', application.id, self.host.id)
 
+            try:
+                lversion = application.run_command(self.get_version_cmd)
+            except application.CommandError:
+                lversion = '0'
+
             while True:
                 try:
-                    try:
-                        lversion = application.run_command(self.get_version_cmd)
-                    except application.CommandError:
-                        lversion = '0'
-
                     nodes.DeploymentSlot(path=slot_path).occupy(handle=self.handle)
 
                     try:
@@ -124,7 +124,7 @@ class Conveyor(object):
                             logging.getLogger().info('Starting deployment of %s %s', application.id, application.data['version'])
                             application.run_command(self.deploy_cmd)
                         else:
-                            logging.getLogger().info('%s %s is already installed', application.id, application.data['version'])
+                            logging.getLogger().info('Will NOT deploy %s %s (already installed)', application.id, application.data['version'])
 
                         result = True
 

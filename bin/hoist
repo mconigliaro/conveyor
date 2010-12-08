@@ -6,6 +6,7 @@ from __future__ import absolute_import
 import ConfigParser
 import optparse
 import os
+import pprint
 import re
 import string
 import sys
@@ -26,7 +27,7 @@ config = ConfigParser.SafeConfigParser(defaults={
 config.read([os.path.join(sys.path[0], './conf/hoist.conf'), '/etc/conveyor/hoist.conf'])
 
 
-op = optparse.OptionParser("usage: %prog [options] [ create <name> <version> | delete <name> | list | get <name> ]")
+op = optparse.OptionParser("usage: %prog [options] [ application create NAME VERSION | < application | host > delete NAME | < application | host > list | < application | host > get NAME ]")
 
 og = optparse.OptionGroup(op, 'Session Options')
 og.add_option('--servers',
@@ -40,7 +41,7 @@ og.add_option('--timeout',
               help="zookeeper connection timeout (default: %default)")
 op.add_option_group(og)
 
-og = optparse.OptionGroup(op, 'Application Options')
+og = optparse.OptionGroup(op, 'Application Creation Options')
 og.add_option('--groups',
               dest='groups',
               default='',
@@ -64,27 +65,31 @@ options.groups = list(set(map(string.strip, options.groups.split(',')))) # remov
 try:
     client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout)
 
-    if args[0] == 'create' and len(args) == 3:
+    args_str = ' '.join(args).strip()
+
+    if re.match('^application create .+? .+?$', args_str):
         data = {
-            'name': args[1],
-            'version': args[2],
+            'name': args[2],
+            'version': args[3],
             'groups': options.groups,
             'slots': options.slots,
             'slot_increment': options.slot_increment
         }
-        path = conveyor.zookeeper.path_join('applications', args[1])
-        print "Created %s (%s)" % (path, conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
+        path = conveyor.zookeeper.path_join('applications', args[2])
+        pprint.PrettyPrinter().pprint(conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
 
-    elif args[0] == 'delete' and len(args) == 2:
-        path = conveyor.zookeeper.path_join('applications', args[1])
+    elif re.match('^(application|host) delete .+?$', args_str):
+        path = conveyor.zookeeper.path_join(args[0] + 's', args[2])
         conveyor.nodes.delete(handle=client.handle, path=path)
-        print "Deleted %s" % path
 
-    elif args[0] == 'list' and len(args) == 1:
-        print conveyor.nodes.list_children(handle=client.handle, path=conveyor.zookeeper.path_join('applications'))
+    elif re.match('^(application|host) list$', args_str):
+        path = conveyor.zookeeper.path_join(args[0] + 's')
+        pprint.PrettyPrinter().pprint(conveyor.nodes.list_children(handle=client.handle, path=path))
 
-    elif args[0] == 'get' and len(args) == 2:
-        print conveyor.nodes.Application.read(handle=client.handle, path=conveyor.zookeeper.path_join('applications', args[1])).data
+    elif re.match('^(application|host) get .+?$', args_str):
+        class_name = getattr(conveyor.nodes, args[0].capitalize())
+        path = conveyor.zookeeper.path_join(args[0] + 's', args[2])
+        pprint.PrettyPrinter().pprint(class_name.read(handle=client.handle, path=path).data)
 
     else:
         op.print_help()
@@ -96,3 +101,6 @@ except SystemExit:
 except:
     traceback.print_exc()
     sys.exit(1)
+
+finally:
+    client.close()

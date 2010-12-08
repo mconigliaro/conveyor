@@ -158,7 +158,7 @@ class Application(PersistentNode):
             'version': data.get('version', '0'),
             'slot_increment': data.get('slot_increment', 1),
             'slots': data.get('slots', 1),
-            'completed': data.get('completed', []),
+            'successful': data.get('successful', []),
             'failed': data.get('failed', [])
         }
 
@@ -175,7 +175,7 @@ class Application(PersistentNode):
     def deployed(self, host_id):
         """Return True if this application has already been deployed"""
 
-        if host_id in set(self.data['failed'] + self.data['completed']):
+        if host_id in set(self.data['failed'] + self.data['successful']):
             logging.getLogger().debug('Deployment of %s %s has already been recorded for host %s', self.id, self.data['version'], host_id)
             result = True
         else:
@@ -268,7 +268,7 @@ class DeploymentSlot(EphemeralNode):
                 app = Application.read(handle=handle, path=zookeeper.get_parent_node(path))
 
                 if deploy_result:
-                    result = 'completed'
+                    result = 'successful'
                     logging.getLogger().info('Deployment of %s %s recorded as: %s', app.id, app.data['version'], result)
 
                 else:
