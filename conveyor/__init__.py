@@ -32,7 +32,7 @@ class Conveyor(object):
             while self.conn_state != zookeeper.CONNECTED_STATE:
                 self.cv.wait(timeout)
                 if self.conn_state != zookeeper.CONNECTED_STATE:
-                    logging.getLogger().error('Connection timed out (retying)')
+                    logging.getLogger().error('Connection timed out (retrying)')
 
         except Exception, e:
             logging.getLogger().exception(e)
@@ -41,22 +41,17 @@ class Conveyor(object):
             self.cv.notify()
             self.cv.release()
 
-    def close(self):
-        """Terminate ZooKeeper session"""
-
-        logging.getLogger().info('Closing connection')
-        zookeeper.close(self.handle)
-
     def __init_watcher(self, handle, type, state, path):
         """Handle connection state changes"""
 
-        logging.getLogger().debug('Connection state changed: %s => %s', self.conn_state, state)
+        logging.getLogger().debug('ZooKeeper connection state changed: %s => %s', self.conn_state, state)
         self.conn_state = state
 
-        if state == zookeeper.CONNECTED_STATE:
-            try:
-                self.cv.acquire()
-                logging.getLogger().info('Connected with session ID: %x', zookeeper.client_id(handle)[0])
+        try:
+            self.cv.acquire()
+
+            if state == zookeeper.CONNECTED_STATE:
+                logging.getLogger().info('Connected to ZooKeeper with session ID: %x', zookeeper.client_id(handle)[0])
 
                 if len(zookeeper.path_split(self.host.path)) > 1:
                     self.host.write(handle=self.handle)
@@ -64,12 +59,15 @@ class Conveyor(object):
                 if self.get_version_cmd and self.deploy_cmd:
                     self.__call_app_root_handler()
 
-            except Exception, e:
-                logging.getLogger().exception(e)
+            else:
+                logging.getLogger().warn('Connection to ZooKeeper has been interrupted')
 
-            finally:
-                self.cv.notify()
-                self.cv.release()
+        except Exception, e:
+            logging.getLogger().exception(e)
+
+        finally:
+            self.cv.notify()
+            self.cv.release()
 
     def __call_app_root_handler(self):
         """Call __try_deploy on all application nodes"""
@@ -86,6 +84,8 @@ class Conveyor(object):
                     nodes.PersistentNode(path=path).write(handle=self.handle)
                 except zookeeper.NodeExistsException: # another host must have created this node already
                     pass
+            except zookeeper.ConnectionLossException:
+                break
 
     def __app_root_watcher(self, handle, type, state, path):
         """Handle application node additions/deletions"""
@@ -137,3 +137,8 @@ class Conveyor(object):
             logging.getLogger().debug('Application change detected: type=%s, state=%s, path=%s', type, state, path)
             self.__try_deploy(path=path)
 
+    def close(self):
+        """Terminate ZooKeeper session"""
+
+        logging.getLogger().info('Closing connection')
+        zookeeper.close(self.handle)
