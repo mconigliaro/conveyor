@@ -1,11 +1,16 @@
 from __future__ import absolute_import
 
 import logging
+import random
 import time
 import threading
 
 from . import nodes
 from . import zookeeper
+
+
+SLOT_WAIT = 3
+SLOT_WAIT_SPLAY = 2
 
 
 class Conveyor(object):
@@ -60,7 +65,7 @@ class Conveyor(object):
                     self.__call_app_root_handler()
 
             else:
-                logging.getLogger().warn('Connection to ZooKeeper has been interrupted')
+                logging.getLogger().warn('Disconnected from ZooKeeper')
 
         except Exception, e:
             logging.getLogger().exception(e)
@@ -101,29 +106,41 @@ class Conveyor(object):
         except zookeeper.NoNodeException: # another host must have deleted this node already
             application = nodes.Application(path=path)
 
-        if application.in_groups(self.host.data['groups']) and not application.deployment_failed(self.host.id):
+        if application.in_groups(self.host.data['groups']) and not application.deployed(self.host.id):
 
-            try:
-                lversion = application.run_command(self.get_version_cmd)
-            except application.CommandError:
-                lversion = '0'
+            slot_path = zookeeper.path_join('applications', application.id, self.host.id)
 
-            if lversion != application.data['version']:
-                slot_path = zookeeper.path_join('applications', application.id, self.host.id)
-                while True:
+            while True:
+                try:
                     try:
-                        nodes.DeploymentSlot(path=slot_path).occupy(handle=self.handle)
-                        try:
-                            application.run_command(self.deploy_cmd)
-                            result = True
-                        except application.CommandError:
-                            result = False
+                        lversion = application.run_command(self.get_version_cmd)
+                    except application.CommandError:
+                        lversion = '0'
 
+                    nodes.DeploymentSlot(path=slot_path).occupy(handle=self.handle)
+
+                    try:
+                        if lversion != application.data['version']:
+                            logging.getLogger().info('Starting deployment of %s %s', application.id, application.data['version'])
+                            application.run_command(self.deploy_cmd)
+                        else:
+                            logging.getLogger().info('%s %s is already installed', application.id, application.data['version'])
+
+                        result = True
+
+                    except application.CommandError:
+                        result = False
+
+                    finally:
                         nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, deploy_result=result)
                         break
-                    except nodes.Application.DeploymentSlotOverflow:
-                        logging.getLogger().debug('Waiting for free slot')
-                        time.sleep(1)
+
+                except nodes.Application.DeploymentSlotOverflow:
+                    sleep = SLOT_WAIT + random.uniform(0, SLOT_WAIT_SPLAY)
+                    logging.getLogger().debug('Waiting %s seconds for free slot', sleep)
+                    time.sleep(sleep)
+
+
 
         if path not in self.app_watchers:
             self.app_watchers.add(path)

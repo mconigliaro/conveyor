@@ -45,16 +45,16 @@ og.add_option('--groups',
               dest='groups',
               default='',
               help="comma-separated list of groups")
-og.add_option('--deployment-slots',
-              dest='deployment_slots',
+og.add_option('--slots',
+              dest='slots',
               type='int',
               default=1,
-              help="deployment slots (default: %default)")
-og.add_option('--deployment-slot-increment',
-              dest='deployment_slot_increment',
+              help="initial deployment slots (default: %default)")
+og.add_option('--slot-increment',
+              dest='slot_increment',
               type='int',
               default=1,
-              help="deployment increment (default: %default)")
+              help="deployment slot increment (default: %default)")
 op.add_option_group(og)
 
 (options, args) = op.parse_args()
@@ -69,8 +69,8 @@ try:
             'name': args[1],
             'version': args[2],
             'groups': options.groups,
-            'deployment_slots': options.deployment_slots,
-            'deployment_slot_increment': options.deployment_slot_increment
+            'slots': options.slots,
+            'slot_increment': options.slot_increment
         }
         path = conveyor.zookeeper.path_join('applications', args[1])
         print "Created %s (%s)" % (path, conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
@@ -81,7 +81,7 @@ try:
         print "Deleted %s" % path
 
     elif args[0] == 'list' and len(args) == 1:
-        print map(lambda app: conveyor.zookeeper.path_split(app.path)[-1], conveyor.nodes.Application.read_all(handle=client.handle, path=conveyor.zookeeper.path_join('applications'), groups=options.groups))
+        print conveyor.nodes.list_children(handle=client.handle, path=conveyor.zookeeper.path_join('applications'))
 
     elif args[0] == 'get' and len(args) == 2:
         print conveyor.nodes.Application.read(handle=client.handle, path=conveyor.zookeeper.path_join('applications', args[1])).data

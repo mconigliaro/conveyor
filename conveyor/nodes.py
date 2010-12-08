@@ -156,10 +156,10 @@ class Application(PersistentNode):
         data = {
             'groups': data.get('groups', []),
             'version': data.get('version', '0'),
-            'deployment_slot_increment': data.get('deployment_slot_increment', 1),
-            'deployment_slots': data.get('deployment_slots', 1),
-            'deployment_completed': data.get('deployment_completed', []),
-            'deployment_failed': data.get('deployment_failed', [])
+            'slot_increment': data.get('slot_increment', 1),
+            'slots': data.get('slots', 1),
+            'completed': data.get('completed', []),
+            'failed': data.get('failed', [])
         }
 
         super(Application, self).__init__(path=path, data=data, attrs=attrs)
@@ -168,18 +168,18 @@ class Application(PersistentNode):
         """Return True on deployment slot overflow"""
 
         result = False
-        if len(list_children(handle=handle, path=self.path)) > self.data['deployment_slots']:
+        if len(list_children(handle=handle, path=self.path)) > self.data['slots']:
             result = True
         return result
 
-    def deployment_failed(self, host_id):
-        """Return True if a deployment of this application failed previously"""
+    def deployed(self, host_id):
+        """Return True if this application has already been deployed"""
 
-        if host_id in self.data['deployment_failed']:
-            logging.getLogger().debug('Deployment of %s has already failed on host %s', self.id, host_id)
+        if host_id in set(self.data['failed'] + self.data['completed']):
+            logging.getLogger().debug('Deployment of %s %s has already been recorded for host %s', self.id, self.data['version'], host_id)
             result = True
         else:
-            logging.getLogger().debug('Deployment of %s has NEVER failed on host %s', self.id, host_id)
+            logging.getLogger().debug('Deployment of %s %s has NEVER been recorded for host %s', self.id, self.data['version'], host_id)
             result = False
 
         return result
@@ -248,7 +248,7 @@ class DeploymentSlot(EphemeralNode):
                     delete(handle=handle, path=self.path)
                     raise Application.DeploymentSlotOverflow
                 else:
-                    app.data['deployment_slots'] -= 1
+                    app.data['slots'] -= 1
                     app.write(handle=handle, overwrite_if_version=app.version)
                     break
 
@@ -268,15 +268,17 @@ class DeploymentSlot(EphemeralNode):
                 app = Application.read(handle=handle, path=zookeeper.get_parent_node(path))
 
                 if deploy_result:
-                    logging.getLogger().info('Deployment of %s %s succeeded', app.id, app.data['version'])
-                    if host_id not in app.data['deployment_completed']:
-                        app.data['deployment_completed'].extend([host_id])
-                else:
-                    logging.getLogger().error('Deployment of %s %s failed', app.id, app.data['version'])
-                    if host_id not in app.data['deployment_failed']:
-                        app.data['deployment_failed'].extend([host_id])
+                    result = 'completed'
+                    logging.getLogger().info('Deployment of %s %s recorded as: %s', app.id, app.data['version'], result)
 
-                app.data['deployment_slots'] += app.data['deployment_slot_increment']
+                else:
+                    result = 'failed'
+                    logging.getLogger().error('Deployment of %s %s recorded as: %s', app.id, app.data['version'], result)
+
+                if host_id not in app.data[result]:
+                    app.data[result].extend([host_id])
+
+                app.data['slots'] += app.data['slot_increment']
 
                 app.write(handle=handle, overwrite_if_version=app.version)
                 break
