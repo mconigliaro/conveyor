@@ -10,8 +10,8 @@ Conveyor is a simple continuous deployment framework built on top of `Apache
 Zookeeper <http://hadoop.apache.org/zookeeper/>`_. Conveyor itself consists of
 two components:
 
-* **conveyor**: Daemon program used to watch for and deploy new applications
-* **hoist**: Command line client used to manage Conveyor nodes within ZooKeeper
+- **conveyor**: Daemon program used to watch for and deploy new applications
+- **hoist**: Command line client used to manage Conveyor nodes within ZooKeeper
 
 Typically, the **conveyor** daemon runs on each application server, and the
 **hoist** command is invoked from your continuous integration server (e.g.
@@ -28,11 +28,27 @@ Now of course, you probably don't want *all* of your application servers to
 deploy the application at the same time, because that will almost certainly lead
 to a brief period of downtime while the deployment is occurring. This is where
 Conveyor's concept of "slots" comes into play. By default the **hoist** command
-creates new applications with just one slot.When an application change is
+creates new applications with just one slot. When an application change is
 detected, the first **conveyor** daemon that sees this change will "occupy" that
 free slot until the application is deployed. In the meantime,the rest of the
 **conveyor** daemons will have to wait until another free slot becomes
 available. The result is a staggered deployment across your entire farm.
+
+So how does Conveyor know how to deploy your application? This is where the
+**get-version-cmd** and **deploy-cmd** options come into play. Before a
+**conveyor** daemon deploys an application, it compares the output of the
+command specified by **get-version-cmd** to the version associated with the
+application in ZooKeeper. If the versions differ, then the comand specified by
+**deploy-cmd** is run. A simple example for an application distributed as a .deb
+packages might look something like this:
+
+::
+
+  get-version-cmd = /usr/bin/dpkg-query --showformat '${Version}' --show %(id)s
+  deploy-cmd = /usr/bin/aptitude install %(id)s=%(version)s
+
+Notice the placeholders that look like **%(foo)s** in the commands above. This
+is how you reference information about a particular application in ZooKeeper.
 
 
 Installation
@@ -61,4 +77,11 @@ To Do
 
 Known Issues
 ------------
+
 - Segfault when reconnecting to ZooKeeper (https://issues.apache.org/jira/browse/ZOOKEEPER-740)
+
+
+Authors
+-------
+
+- Michael T. Conigliaro <mike [at] conigliaro [dot] org>

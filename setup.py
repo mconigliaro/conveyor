@@ -21,7 +21,7 @@ setup(
 
     author = 'Michael T. Conigliaro',
     author_email = 'mike [at] conigliaro [dot] org',
-    description = 'Conveyor is a simple continuous deployment framework',
+    description = 'A simple continuous deployment framework built on top of Apache Zookeeper',
     url = 'http://github.com/mconigliaro/conveyor',
 
     keywords = 'continuous deployment',
