@@ -140,8 +140,6 @@ class Conveyor(object):
                     logging.getLogger().debug('Waiting %s seconds for free slot', sleep)
                     time.sleep(sleep)
 
-
-
         if path not in self.app_watchers:
             self.app_watchers.add(path)
             zookeeper.exists(self.handle, application.path, self.__app_watcher)
