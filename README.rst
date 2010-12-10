@@ -71,6 +71,7 @@ FIXME
 To Do
 -----
 
+- Implement proper ACLs
 - Finish installation/configuration documentation
 - Upload package to PyPI
 

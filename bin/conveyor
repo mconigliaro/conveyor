@@ -5,6 +5,7 @@ from __future__ import absolute_import
 
 import ConfigParser
 import logging
+import logging.handlers
 import optparse
 import os
 import socket
@@ -31,10 +32,13 @@ config = ConfigParser.SafeConfigParser(defaults={
     'log-file-rotate-interval': '7',
     'log-file-max-backups': '4'
 })
-config.read([os.path.join(sys.path[0], './conf/conveyor.conf'), '/etc/conveyor/conveyor.conf'])
+config.read([os.path.join(os.path.dirname(__file__), '..', 'conf', 'conveyor.conf'), '/etc/conveyor/conveyor.conf'])
 
 
-op = optparse.OptionParser("usage: %prog [options]")
+op = optparse.OptionParser(
+    description='Daemon program for Conveyor - used to watch for and deploy new applications',
+    version=conveyor.__version__,
+    epilog="%s was written by %s <%s>\n%s" % (conveyor.__name__, conveyor.__author__, conveyor.__author_email__, conveyor.__url__))
 
 og = optparse.OptionGroup(op, 'Session Options')
 og.add_option('--servers',
@@ -90,7 +94,8 @@ options.groups = conveyor.util.comma_str_to_list(options.groups)
 
 logging.getLogger().setLevel(getattr(logging, options.log_level.upper()))
 console_logger = logging.StreamHandler()
-console_logger.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
+log_format = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+console_logger.setFormatter(log_format)
 logging.getLogger().addHandler(console_logger)
 if options.log_file_path:
     fileLogger = logging.handlers.TimedRotatingFileHandler(
@@ -98,7 +103,7 @@ if options.log_file_path:
         when = options.log_file_rotate_interval_type,
         interval = options.log_file_rotate_interval,
         backupCount = options.log_file_max_backups)
-    fileLogger.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
+    fileLogger.setFormatter(log_format)
     logging.getLogger().addHandler(fileLogger)
 
 

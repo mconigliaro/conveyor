@@ -30,10 +30,17 @@ config = ConfigParser.SafeConfigParser(defaults={
     'get-version-cmd': None,
     'deploy-cmd': None
 })
-config.read([os.path.join(sys.path[0], './conf/hoist.conf'), '/etc/conveyor/hoist.conf'])
+
+print os.path.join(os.path.dirname(__file__), './conf/hoist.conf')
+
+config.read([os.path.join(os.path.dirname(__file__), '..', 'conf', 'hoist.conf'), '/etc/conveyor/hoist.conf'])
 
 
-op = optparse.OptionParser("usage: %prog [options] [ application create NAME VERSION | < application | host > delete NAME | < application | host > list | < application | host > get NAME ]")
+op = optparse.OptionParser(
+    usage="%prog [options] [ application create NAME VERSION | < application | host > delete NAME | < application | host > list | < application | host > get NAME ]",
+    description='Command line client for Conveyor - used to manage data within ZooKeeper',
+    version=conveyor.__version__,
+    epilog="%s was written by %s <%s>\n%s" % (conveyor.__name__, conveyor.__author__, conveyor.__author_email__, conveyor.__url__))
 
 og = optparse.OptionGroup(op, 'Session Options')
 og.add_option('--servers',

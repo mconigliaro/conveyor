@@ -10,6 +10,13 @@ from . import zookeeper
 from . import util
 
 
+__name__ = 'Conveyor'
+__version_info__ = ('0', '0', '1')
+__version__ = '.'.join(__version_info__)
+__author__ = 'Michael T. Conigliaro'
+__author_email__ = 'mike [at] conigliaro [dot] org'
+__url__ = 'http://github.com/mconigliaro/conveyor'
+
 SLOT_WAIT = 3
 SLOT_WAIT_SPLAY = 2
 
