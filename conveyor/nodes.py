@@ -156,8 +156,10 @@ class Application(PersistentNode):
         data = {
             'groups': data.get('groups', []),
             'version': data.get('version', '0'),
-            'slot_increment': data.get('slot_increment', 1),
             'slots': data.get('slots', 1),
+            'slot_increment': data.get('slot_increment', 1),
+            'get_version_cmd': data.get('get_version_cmd', None),
+            'deploy_cmd': data.get('deploy_cmd', None),
             'successful': data.get('successful', []),
             'failed': data.get('failed', [])
         }
@@ -189,16 +191,23 @@ class Application(PersistentNode):
 
         command = self.__interpolate(command)
         logging.getLogger().debug('Running command: %s', command)
-        p = subprocess.Popen(command, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
-        result = p.communicate()[0].strip()
 
-        if p.returncode:
-            logging.getLogger().warn('Command result: %s (%d)', result, p.returncode)
+        try:
+            p = subprocess.Popen(command, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+            result = p.communicate()[0].strip()
+
+        except TypeError:
+            logging.getLogger().warn('Command is not runnable: %s', command)
             raise Application.CommandError
-        else:
-            logging.getLogger().debug('Command result: %s (%d)', result, p.returncode)
 
-        return result
+        else:
+            if p.returncode:
+                logging.getLogger().warn('Command result: %s (%d)', result, p.returncode)
+                raise Application.CommandError
+            else:
+                logging.getLogger().debug('Command result: %s (%d)', result, p.returncode)
+
+            return result
 
     def __interpolate(self, command):
         """Do variable interpolation on a string using this node's data"""
@@ -223,7 +232,12 @@ class Application(PersistentNode):
                 result = ''
             return str(result)
 
-        return re.sub('%\((.+?)\)s', get_attr, re.sub('%\(data\[(.+?)]\)s', get_data, command))
+        try:
+            result = re.sub('%\((.+?)\)s', get_attr, re.sub('%\(data\[(.+?)]\)s', get_data, command))
+        except TypeError:
+            result = None
+
+        return result
 
 
 class DeploymentSlot(EphemeralNode):
@@ -248,7 +262,7 @@ class DeploymentSlot(EphemeralNode):
                     delete(handle=handle, path=self.path)
                     raise Application.DeploymentSlotOverflow
                 else:
-                    app.data['slots'] -= 1
+                    app.data['slots'] = int(app.data['slots']) - 1
                     app.write(handle=handle, overwrite_if_version=app.version)
                     break
 
@@ -278,7 +292,7 @@ class DeploymentSlot(EphemeralNode):
                 if host_id not in app.data[result]:
                     app.data[result].extend([host_id])
 
-                app.data['slots'] += app.data['slot_increment']
+                app.data['slots'] = int(app.data['slots']) + int(app.data['slot_increment'])
 
                 app.write(handle=handle, overwrite_if_version=app.version)
                 break

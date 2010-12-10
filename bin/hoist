@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 
 import ConfigParser
+import logging
 import optparse
 import os
 import pprint
@@ -22,7 +23,12 @@ import conveyor
 
 config = ConfigParser.SafeConfigParser(defaults={
     'servers': 'localhost:2181/conveyor',
-    'timeout': '10'
+    'timeout': '10',
+    'groups': None,
+    'slots': 1,
+    'slot_increment': 1,
+    'get-version-cmd': None,
+    'deploy-cmd': None
 })
 config.read([os.path.join(sys.path[0], './conf/hoist.conf'), '/etc/conveyor/hoist.conf'])
 
@@ -44,22 +50,39 @@ op.add_option_group(og)
 og = optparse.OptionGroup(op, 'Application Creation Options')
 og.add_option('--groups',
               dest='groups',
-              default='',
               help="comma-separated list of groups")
 og.add_option('--slots',
               dest='slots',
               type='int',
-              default=1,
-              help="initial deployment slots (default: %default)")
+              help="initial deployment slots")
 og.add_option('--slot-increment',
               dest='slot_increment',
               type='int',
-              default=1,
-              help="deployment slot increment (default: %default)")
+              help="deployment slot increment")
+og.add_option('--get-version-cmd',
+              dest='get_version_cmd',
+              help="command to get version")
+og.add_option('--deploy-cmd',
+              dest='deploy_cmd',
+              help="deployment command")
+op.add_option_group(og)
+
+og = optparse.OptionGroup(op, 'Output and Logging Options')
+og.add_option('--log-level',
+              dest='log_level',
+              type='choice',
+              choices=['critical', 'error', 'warning', 'info', 'debug'],
+              help="critical, error, warning, info, debug")
 op.add_option_group(og)
 
 (options, args) = op.parse_args()
-options.groups = list(set(map(string.strip, options.groups.split(',')))) # remove duplicate groups
+
+
+if options.log_level:
+    conveyor.logging.getLogger().setLevel(getattr(logging, options.log_level.upper()))
+    console_logger = logging.StreamHandler()
+    console_logger.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
+    logging.getLogger().addHandler(console_logger)
 
 
 try:
@@ -68,13 +91,27 @@ try:
     args_str = ' '.join(args).strip()
 
     if re.match('^application create .+? .+?$', args_str):
-        data = {
+
+        config_sources = []
+
+        try:
+            config_sources.append(config.items('application:DEFAULT', raw=True))
+        except ConfigParser.NoSectionError:
+            pass
+
+        try:
+            config_sources.append(config.items('application:' + args[2], raw=True))
+        except ConfigParser.NoSectionError:
+            pass
+
+        config_sources.append(eval(str(options)).items()) # haha
+
+        config_sources.append({
             'name': args[2],
-            'version': args[3],
-            'groups': options.groups,
-            'slots': options.slots,
-            'slot_increment': options.slot_increment
-        }
+            'version': args[3]
+        }.items())
+
+        data = conveyor.util.read_options(*config_sources, to_list=['groups'])
         path = conveyor.zookeeper.path_join('applications', args[2])
         pprint.PrettyPrinter().pprint(conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
 

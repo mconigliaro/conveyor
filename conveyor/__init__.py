@@ -7,6 +7,7 @@ import threading
 
 from . import nodes
 from . import zookeeper
+from . import util
 
 
 SLOT_WAIT = 3
@@ -16,13 +17,11 @@ SLOT_WAIT_SPLAY = 2
 class Conveyor(object):
     """The main conveyor class"""
 
-    def __init__(self, servers='localhost:2181/conveyor', timeout=10, host_id=None, groups=[], get_version_cmd=None, deploy_cmd=None):
+    def __init__(self, servers='localhost:2181/conveyor', timeout=10, host_id=None, groups=[]):
         """Establish ZooKeeper session"""
 
-        self.host = nodes.Host(path=zookeeper.path_join('hosts', host_id), data={'groups':groups})
-
-        self.get_version_cmd = get_version_cmd
-        self.deploy_cmd = deploy_cmd
+        if host_id:
+            self.host = nodes.Host(path=zookeeper.path_join('hosts', host_id), data={'groups':groups})
 
         self.conn_state = None
         self.handle = None
@@ -58,10 +57,8 @@ class Conveyor(object):
             if state == zookeeper.CONNECTED_STATE:
                 logging.getLogger().info('Connected to ZooKeeper with session ID: %x', zookeeper.client_id(handle)[0])
 
-                if len(zookeeper.path_split(self.host.path)) > 1:
+                if hasattr(self, 'host'):
                     self.host.write(handle=self.handle)
-
-                if self.get_version_cmd and self.deploy_cmd:
                     self.__call_app_root_handler()
 
             else:
@@ -111,7 +108,7 @@ class Conveyor(object):
             slot_path = zookeeper.path_join('applications', application.id, self.host.id)
 
             try:
-                lversion = application.run_command(self.get_version_cmd)
+                lversion = application.run_command(application.data['get_version_cmd'])
             except application.CommandError:
                 lversion = '0'
 
@@ -121,8 +118,8 @@ class Conveyor(object):
 
                     try:
                         if lversion != application.data['version']:
-                            logging.getLogger().info('Starting deployment of %s %s', application.id, application.data['version'])
-                            application.run_command(self.deploy_cmd)
+                            logging.getLogger().info('Deploying %s %s', application.id, application.data['version'])
+                            application.run_command(application.data['deploy_cmd'])
                         else:
                             logging.getLogger().info('Will NOT deploy %s %s (already installed)', application.id, application.data['version'])
 

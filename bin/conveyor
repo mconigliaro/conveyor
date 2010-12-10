@@ -56,17 +56,6 @@ og.add_option('--groups',
               help="comma-separated list of groups")
 op.add_option_group(og)
 
-og = optparse.OptionGroup(op, 'Deployment Options')
-og.add_option('--get-version-cmd',
-              dest='get_version_cmd',
-              default=config.get('deployment', 'get-version-cmd', raw=True),
-              help="command to get version (default: %default)")
-og.add_option('--deploy-cmd',
-              dest='deploy_cmd',
-              default=config.get('deployment', 'deploy-cmd', raw=True),
-              help="deployment command (default: %default)")
-op.add_option_group(og)
-
 og = optparse.OptionGroup(op, 'Output and Logging Options')
 og.add_option('--log-level',
               dest='log_level',
@@ -96,7 +85,7 @@ og.add_option('--log-file-max-backups',
 op.add_option_group(og)
 
 (options, args) = op.parse_args()
-options.groups = list(set(map(string.strip, options.groups.split(',')))) # remove duplicate groups
+options.groups = conveyor.util.comma_str_to_list(options.groups)
 
 
 logging.getLogger().setLevel(getattr(logging, options.log_level.upper()))
@@ -114,7 +103,7 @@ if options.log_file_path:
 
 
 try:
-    client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout, host_id=options.host_id, groups=options.groups, get_version_cmd=options.get_version_cmd, deploy_cmd=options.deploy_cmd)
+    client = conveyor.Conveyor(servers=options.servers, timeout=options.timeout, host_id=options.host_id, groups=options.groups)
     while True:
         time.sleep(1)
 
