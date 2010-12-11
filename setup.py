@@ -3,10 +3,12 @@
 
 import os
 
-from setuptools import setup, find_packages
+try:
+    from setuptools import setup, find_packages
+except ImportError:
+    from distutils.core import setup
 
 import conveyor
-
 
 def read(file):
     with open(os.path.abspath(os.path.join(os.path.dirname(__file__), file))) as f:

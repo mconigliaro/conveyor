@@ -3,10 +3,15 @@ from __future__ import absolute_import
 import string
 
 
-def comma_str_to_list(groups):
+def comma_str_to_list(str_list):
     """Convert a comma separated list of things into a unique list"""
 
-    return list(set(map(string.strip, groups.split(','))))
+    try:
+        result = sorted(list(set(map(string.strip, str_list.split(',')))))
+    except AttributeError:
+        result = []
+
+    return result
 
 
 def read_options(*sources, **options):
@@ -15,10 +20,14 @@ def read_options(*sources, **options):
     data = {}
 
     for source in sources:
+
+        if source.__class__ == dict:
+            source = source.items()
+
         for name, value in source:
-            name = string.replace(name, '-', '_') # FIXME: this may become a source of weird bugs...
+            name = string.replace(name, '-', '_') # FIXME: this may become a source of difficult to track down bugs...
             if value:
-                if name in options['to_list']:
+                if 'to_list' in options and name in options['to_list']:
                     data[name] = comma_str_to_list(value)
                 else:
                     data[name] = value
