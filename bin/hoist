@@ -132,9 +132,6 @@ try:
 
         data = conveyor.util.read_options(*config_sources, to_list=['groups'])
         path = conveyor.zookeeper.path_join('applications', args[2])
-
-        pprint.PrettyPrinter().pprint(config_sources)
-        pprint.PrettyPrinter().pprint(data)
         pprint.PrettyPrinter().pprint(conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
 
     elif re.match('^(application|host) delete .+?$', args_str):
