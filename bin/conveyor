@@ -27,7 +27,7 @@ op = optparse.OptionParser(
     epilog="%s was written by %s <%s>\n%s" % (conveyor.__name__, conveyor.__author__, conveyor.__author_email__, conveyor.__url__))
 
 op.set_defaults(
-    config_files=', '.join([os.path.join(os.path.dirname(__file__), '..', 'conf', 'hoist.conf'), '/etc/conveyor/hoist.conf']),
+    config_files=', '.join([os.path.join(os.path.dirname(__file__), '..', 'conf', 'conveyor.conf'), '/etc/conveyor/conveyor.conf']),
     servers='localhost:2181/conveyor',
     timeout='10',
     host_id=socket.getfqdn(),
