@@ -3,12 +3,12 @@
 
 import os
 
-try:
-    from setuptools import setup, find_packages
-except ImportError:
-    from distutils.core import setup
+import distribute_setup
+distribute_setup.use_setuptools()
+from setuptools import setup, find_packages
 
 import conveyor
+
 
 def read(file):
     with open(os.path.abspath(os.path.join(os.path.dirname(__file__), file))) as f:
@@ -19,10 +19,6 @@ def read(file):
 setup(
     name = conveyor.__name__.lower(),
     version = conveyor.__version__,
-    packages = find_packages(),
-    scripts = ['bin/conveyor', 'bin/hoist'],
-
-    install_requires = ['nose', 'setuptools', 'zookeeper'],
 
     author = conveyor.__author__,
     author_email = conveyor.__author_email__,
@@ -40,5 +36,11 @@ setup(
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 2.6",
         "Topic :: System :: Software Distribution"
-    ]
+    ],
+
+    install_requires = ['nose', 'setuptools', 'zookeeper'],
+
+    packages = find_packages(),
+    scripts = ['bin/conveyor', 'bin/hoist'],
+    include_package_data = True
 )
