@@ -13,8 +13,9 @@ two components:
 - **conveyor**: Daemon program used to watch for and deploy new applications
 - **hoist**: Command line client used to manage data within ZooKeeper
 
-Typically, the **conveyor** daemon runs on each application server, and the
-**hoist** command is invoked from your continuous integration server (e.g.
+Typically, the **conveyor** daemon is started on each application server (i.e.
+the servers you want to deply applications to), and the **hoist** command is
+invoked from your continuous integration server (e.g.
 `Hudson CI <http://hudson-ci.org/>`_, etc.) every time a new application is
 ready to be deployed:
 
@@ -26,7 +27,7 @@ appropriate commands to install or update the application.
 
 Now of course, you probably don't want *all* of your application servers to
 deploy the application at the same time, because that will almost certainly lead
-to a brief period of downtime while the deployment is occurring. This is where
+to a brief period of downtime until the deployment is complete. This is where
 Conveyor's concept of "slots" comes in. By default the **hoist** command creates
 new applications with just one slot. When an application change is detected, the
 first **conveyor** daemon that sees this change will "occupy" that free slot
@@ -59,27 +60,33 @@ Installation
 #. Install the Python bindings for ZooKeeper everywhere that **conveyor** and
    **hoist** will be run (again, this may be as simple as: ``aptitude install
    python-zookeeper``)
-#. Install Conveyor (FIXME)
+#. Install Conveyor (e.g. ``pip install conveyor``)
 
 
 Configuration
 -------------
 
-FIXME
+By default, the **conveyor** daemon and **hoist** commands look for their
+configuration files at **/etc/conveyor/conveyor.conf** and
+**/etc/conveyor/hoist.conf** respectively. You can find examples of these files
+in **site-packages/conveyor-<version>/conf**. Alternatively, you can skip
+creating configuration files altogether and pass all the parameters on the
+command line. See the **--help** option for a list of available parameters.
+
 
 
 To Do
 -----
 
+- Decide on an automatic roll-back strategy for failed deployments
 - Implement proper ACLs
-- Finish installation/configuration documentation
-- Upload package to PyPI
 
 
 Known Issues
 ------------
 
-- Segfault when reconnecting to ZooKeeper (https://issues.apache.org/jira/browse/ZOOKEEPER-740)
+- Segfault when reconnecting to ZooKeeper
+  (`ZOOKEEPER-740 <https://issues.apache.org/jira/browse/ZOOKEEPER-740>`_)
 
 
 Authors
