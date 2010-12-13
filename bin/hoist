@@ -13,12 +13,11 @@ import string
 import sys
 import traceback
 
-if string.find(os.path.abspath(sys.argv[0]), os.sep+'conveyor') != -1:
-    sys.path.insert(0, os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]), os.pardir, os.pardir)))
-if hasattr(os, "getuid") and os.getuid() != 0:
-    sys.path.insert(0, os.path.abspath(os.getcwd()))
-
-import conveyor
+try:
+    import conveyor
+except ImportError:
+    sys.path.insert(0, os.path.normpath(os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir)))
+    import conveyor
 
 
 op = optparse.OptionParser(
@@ -28,7 +27,7 @@ op = optparse.OptionParser(
     epilog="%s was written by %s <%s>\n%s" % (conveyor.__name__, conveyor.__author__, conveyor.__author_email__, conveyor.__url__))
 
 op.set_defaults(
-    config_files=', '.join([os.path.join(os.path.dirname(__file__), '..', 'conf', 'hoist.conf'), '/etc/conveyor/hoist.conf']),
+    config_files=', '.join([os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'conf', 'hoist.conf')), '/etc/conveyor/hoist.conf']),
     servers='localhost:2181/conveyor',
     timeout='10',
     groups=None,

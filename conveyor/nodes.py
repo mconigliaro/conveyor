@@ -69,7 +69,7 @@ class Node(object):
         """Return true if the node belongs to any of the specified groups"""
 
         intersection = list(set(groups) & set(self.data['groups']))
-        logging.getLogger().debug('Intersection between groups %s and %s: %s', groups, self.data['groups'], intersection)
+        logging.getLogger().debug('Checking for intersection between groups %s and %s: %s', groups, self.data['groups'], intersection)
 
         if intersection:
             result = True
@@ -181,7 +181,7 @@ class Application(PersistentNode):
             logging.getLogger().debug('Deployment of %s %s has already been recorded for host %s', self.id, self.data['version'], host_id)
             result = True
         else:
-            logging.getLogger().debug('Deployment of %s %s has NEVER been recorded for host %s', self.id, self.data['version'], host_id)
+            logging.getLogger().debug('Deployment of %s %s has NOT been recorded for host %s', self.id, self.data['version'], host_id)
             result = False
 
         return result

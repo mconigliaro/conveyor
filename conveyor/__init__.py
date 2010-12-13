@@ -11,7 +11,7 @@ from . import util
 
 
 __name__ = 'Conveyor'
-__version_info__ = ('0', '0', '1')
+__version_info__ = ('0', '0', '2')
 __version__ = '.'.join(__version_info__)
 __author__ = 'Michael T. Conigliaro'
 __author_email__ = 'mike [at] conigliaro [dot] org'
@@ -141,7 +141,7 @@ class Conveyor(object):
 
                 except nodes.Application.DeploymentSlotOverflow:
                     sleep = SLOT_WAIT + random.uniform(0, SLOT_WAIT_SPLAY)
-                    logging.getLogger().debug('Waiting %s seconds for free slot', sleep)
+                    logging.getLogger().info('No slots available for %s %s (retrying in %s seconds)', application.id, application.data['version'], sleep)
                     time.sleep(sleep)
 
         if path not in self.app_watchers:
