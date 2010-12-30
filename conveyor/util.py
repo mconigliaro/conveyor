@@ -1,6 +1,13 @@
 from __future__ import absolute_import
 
 import string
+import subprocess
+
+
+def run_command(command):
+    """Run a shell command and return the output"""
+
+    return subprocess.Popen(command, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE).communicate()[0].strip()
 
 
 def comma_str_to_list(str_list):
@@ -25,7 +32,7 @@ def read_options(*sources, **options):
             source = source.items()
 
         for name, value in source:
-            name = string.replace(name, '-', '_') # FIXME: this may become a source of difficult to track down bugs...
+            name = string.replace(name, '-', '_') # FIXME: This may become a source of difficult to track down bugs...
             if value:
                 if 'to_list' in options and name in options['to_list']:
                     data[name] = comma_str_to_list(value)

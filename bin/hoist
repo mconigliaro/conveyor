@@ -4,10 +4,10 @@
 from __future__ import absolute_import
 
 import ConfigParser
+import json
 import logging
 import optparse
 import os
-import pprint
 import re
 import string
 import sys
@@ -131,7 +131,7 @@ try:
 
         data = conveyor.util.read_options(*config_sources, to_list=['groups'])
         path = conveyor.zookeeper.path_join('applications', args[2])
-        pprint.PrettyPrinter().pprint(conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data)
+        print json.dumps(conveyor.nodes.Application(path=path, data=data).write(handle=client.handle).data, sort_keys=True, indent=4)
 
     elif re.match('^(application|host) delete .+?$', args_str):
         path = conveyor.zookeeper.path_join(args[0] + 's', args[2])
@@ -139,12 +139,12 @@ try:
 
     elif re.match('^(application|host) list$', args_str):
         path = conveyor.zookeeper.path_join(args[0] + 's')
-        pprint.PrettyPrinter().pprint(conveyor.nodes.list_children(handle=client.handle, path=path))
+        print json.dumps(conveyor.nodes.list_children(handle=client.handle, path=path), sort_keys=True, indent=4)
 
     elif re.match('^(application|host) get .+?$', args_str):
         class_name = getattr(conveyor.nodes, args[0].capitalize())
         path = conveyor.zookeeper.path_join(args[0] + 's', args[2])
-        pprint.PrettyPrinter().pprint(class_name.read(handle=client.handle, path=path).data)
+        print json.dumps(class_name.read(handle=client.handle, path=path).data, sort_keys=True, indent=4)
 
     else:
         op.print_help()

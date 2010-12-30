@@ -130,10 +130,11 @@ class Conveyor(object):
                         else:
                             logging.getLogger().info('Will NOT deploy %s %s (already installed)', application.id, application.data['version'])
 
-                        result = True
-
                     except application.CommandError:
                         result = False
+
+                    else:
+                        result = True
 
                     finally:
                         nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, deploy_result=result)
