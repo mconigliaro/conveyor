@@ -18,7 +18,7 @@ __author_email__ = 'mike [at] conigliaro [dot] org'
 __url__ = 'http://github.com/mconigliaro/conveyor'
 
 SLOT_WAIT = 3
-SLOT_WAIT_SPLAY = 2
+SLOT_WAIT_SPLAY = (0, 2)
 
 
 class Conveyor(object):
@@ -105,12 +105,14 @@ class Conveyor(object):
     def __try_deploy(self, path):
         """Deploy applications as necessary"""
 
-        try:
-            application = nodes.Application.read(handle=self.handle, path=path)
-        except zookeeper.NoNodeException: # another host must have deleted this node already
-            application = nodes.Application(path=path)
+        while True:
+            try:
+                application = nodes.Application.read(handle=self.handle, path=path)
+            except zookeeper.NoNodeException: # another host must have deleted this node already
+                application = nodes.Application(path=path)
 
-        if application.in_groups(self.host.data['groups']) and not application.deployed(self.host.id):
+            if not application.in_groups(self.host.data['groups']) or application.deployed(self.host.id):
+                break
 
             slot_path = zookeeper.path_join('applications', application.id, self.host.id)
 
@@ -119,35 +121,34 @@ class Conveyor(object):
             except application.CommandError:
                 lversion = '0'
 
-            while True:
-                try:
-                    nodes.DeploymentSlot(path=slot_path).occupy(handle=self.handle)
+            try:
+                nodes.DeploymentSlot(path=slot_path).occupy(handle=self.handle)
 
+                result = None
+
+                if lversion == application.data['version']:
+                    logging.getLogger().info('Will NOT deploy %s %s (already installed)', application.id, application.data['version'])
+                    result = True
+
+                elif application.too_many_deployment_failures():
+                    logging.getLogger().info('Application %s %s has exceeded the maximum number of deployment failures (will NOT deploy)', application.id, application.data['version'])
+
+                else:
+                    logging.getLogger().info('Deploying %s %s', application.id, application.data['version'])
                     try:
-                        if lversion != application.data['version']:
-                            logging.getLogger().info('Deploying %s %s', application.id, application.data['version'])
-                            application.run_command(application.data['deploy_cmd'])
-                        else:
-                            logging.getLogger().info('Will NOT deploy %s %s (already installed)', application.id, application.data['version'])
-
+                        application.run_command(application.data['deploy_cmd'])
                     except application.CommandError:
                         result = False
-
                     else:
                         result = True
 
-                    finally:
-                        nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, deploy_result=result)
-                        break
+                nodes.DeploymentSlot.free(handle=self.handle, path=slot_path, deploy_result=result)
+                break
 
-                except nodes.Application.DeploymentSlotOverflow:
-                    sleep = SLOT_WAIT + random.uniform(0, SLOT_WAIT_SPLAY)
-                    logging.getLogger().info('No slots available for %s %s (retrying in %s seconds)', application.id, application.data['version'], sleep)
-                    time.sleep(sleep)
-
-                except nodes.Application.TooManyDeploymentFailures:
-                    logging.getLogger().info('Application %s %s has exceeded the maximum number of deployment failures (will NOT deploy)', application.id, application.data['version'])
-                    break
+            except nodes.Application.DeploymentSlotOverflow:
+                sleep = SLOT_WAIT + random.uniform(*SLOT_WAIT_SPLAY)
+                logging.getLogger().info('No slots available for %s %s (retrying in %s seconds)', application.id, application.data['version'], sleep)
+                time.sleep(sleep)
 
         if path not in self.app_watchers:
             self.app_watchers.add(path)

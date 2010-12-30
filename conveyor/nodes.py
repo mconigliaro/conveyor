@@ -166,7 +166,8 @@ class Application(PersistentNode):
             'get_version_cmd': data.get('get_version_cmd', None),
             'deploy_cmd': data.get('deploy_cmd', None),
             'successful': data.get('successful', []),
-            'failed': data.get('failed', [])
+            'failed': data.get('failed', []),
+            'skipped': data.get('skipped', [])
         }
 
         super(Application, self).__init__(path=path, data=data, attrs=attrs)
@@ -175,7 +176,7 @@ class Application(PersistentNode):
         """Return True on deployment slot overflow"""
 
         result = False
-        if len(list_children(handle=handle, path=self.path)) > self.data['slots']:
+        if len(list_children(handle=handle, path=self.path)) > int(self.data['slots']):
             result = True
         return result
 
@@ -183,14 +184,14 @@ class Application(PersistentNode):
         """Return True if this application has exceeded the maximum number of deployment failures"""
 
         result = False
-        if len(self.data['failed']) > self.data['failed_max']:
+        if len(self.data['failed']) > int(self.data['failed_max']):
             result = True
         return result
 
     def deployed(self, host_id):
         """Return True if this application has already been deployed"""
 
-        if host_id in set(self.data['failed'] + self.data['successful']):
+        if host_id in set(self.data['successful'] + self.data['failed'] + self.data['skipped']):
             logging.getLogger().debug('Deployment of %s %s has already been recorded for host %s', self.id, self.data['version'], host_id)
             result = True
         else:
@@ -274,9 +275,6 @@ class DeploymentSlot(EphemeralNode):
                 if app.deployment_slot_overflow(handle=handle):
                     delete(handle=handle, path=self.path)
                     raise Application.DeploymentSlotOverflow
-                elif app.too_many_deployment_failures():
-                    delete(handle=handle, path=self.path)
-                    raise Application.TooManyDeploymentFailures
                 else:
                     app.data['slots'] = int(app.data['slots']) - 1
                     app.write(handle=handle, overwrite_if_version=app.version)
@@ -297,13 +295,17 @@ class DeploymentSlot(EphemeralNode):
             try:
                 app = Application.read(handle=handle, path=zookeeper.get_parent_node(path))
 
-                if deploy_result:
+                if deploy_result == True:
                     result = 'successful'
                     logging.getLogger().info('Deployment of %s %s recorded as: %s', app.id, app.data['version'], result)
 
-                else:
+                elif deploy_result == False:
                     result = 'failed'
                     logging.getLogger().error('Deployment of %s %s recorded as: %s', app.id, app.data['version'], result)
+
+                else:
+                    result = 'skipped'
+                    logging.getLogger().info('Deployment of %s %s recorded as: %s', app.id, app.data['version'], result)
 
                 if host_id not in app.data[result]:
                     app.data[result].extend([host_id])

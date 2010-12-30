@@ -26,7 +26,7 @@ def read_options(*sources, **options):
 
         for name, value in source:
             name = string.replace(name, '-', '_') # FIXME: This may become a source of difficult to track down bugs...
-            if value:
+            if value != None:
                 if 'to_list' in options and name in options['to_list']:
                     data[name] = comma_str_to_list(value)
                 else:
