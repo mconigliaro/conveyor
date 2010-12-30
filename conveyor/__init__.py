@@ -145,6 +145,10 @@ class Conveyor(object):
                     logging.getLogger().info('No slots available for %s %s (retrying in %s seconds)', application.id, application.data['version'], sleep)
                     time.sleep(sleep)
 
+                except nodes.Application.TooManyDeploymentFailures:
+                    logging.getLogger().info('Application %s %s has exceeded the maximum number of deployment failures (will NOT deploy)', application.id, application.data['version'])
+                    break
+
         if path not in self.app_watchers:
             self.app_watchers.add(path)
             zookeeper.exists(self.handle, application.path, self.__app_watcher)

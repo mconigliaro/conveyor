@@ -147,6 +147,9 @@ class Application(PersistentNode):
     class DeploymentSlotOverflow(Exception):
         """Exception raised on deployment slot overflow"""
 
+    class TooManyDeploymentFailures(Exception):
+        """Exception raised when an application has exceeded the maximum number of deployment failures"""
+
     class CommandError(Exception):
         """Exception raised on command error"""
 
@@ -159,6 +162,7 @@ class Application(PersistentNode):
             'version': data.get('version', '0'),
             'slots': data.get('slots', 1),
             'slot_increment': data.get('slot_increment', 1),
+            'failed_max': data.get('failed_max', 0),
             'get_version_cmd': data.get('get_version_cmd', None),
             'deploy_cmd': data.get('deploy_cmd', None),
             'successful': data.get('successful', []),
@@ -172,6 +176,14 @@ class Application(PersistentNode):
 
         result = False
         if len(list_children(handle=handle, path=self.path)) > self.data['slots']:
+            result = True
+        return result
+
+    def too_many_deployment_failures(self):
+        """Return True if this application has exceeded the maximum number of deployment failures"""
+
+        result = False
+        if len(self.data['failed']) > self.data['failed_max']:
             result = True
         return result
 
@@ -262,6 +274,9 @@ class DeploymentSlot(EphemeralNode):
                 if app.deployment_slot_overflow(handle=handle):
                     delete(handle=handle, path=self.path)
                     raise Application.DeploymentSlotOverflow
+                elif app.too_many_deployment_failures():
+                    delete(handle=handle, path=self.path)
+                    raise Application.TooManyDeploymentFailures
                 else:
                     app.data['slots'] = int(app.data['slots']) - 1
                     app.write(handle=handle, overwrite_if_version=app.version)

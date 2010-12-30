@@ -33,6 +33,7 @@ op.set_defaults(
     groups=None,
     slots=1,
     slot_increment=1,
+    failed_max=0,
     get_version_cmd=None,
     deploy_cmd=None
 )
@@ -65,6 +66,10 @@ og.add_option('--slot-increment',
               dest='slot_increment',
               type='int',
               help="deployment slot increment (default: %default)")
+og.add_option('--failed-max',
+              dest='failed_max',
+              type='int',
+              help="maximum failed deployments (default: %default)")
 og.add_option('--get-version-cmd',
               dest='get_version_cmd',
               help="command to get version (default: %default)")
@@ -90,6 +95,7 @@ config = ConfigParser.SafeConfigParser(defaults={
     'groups': options.groups,
     'slots': options.slots,
     'slot-increment': options.slot_increment,
+    'failed-max': options.failed_max,
     'get-version-cmd': options.get_version_cmd,
     'deploy-cmd': options.deploy_cmd
 })
