@@ -1,13 +1,6 @@
 from __future__ import absolute_import
 
 import string
-import subprocess
-
-
-def run_command(command):
-    """Run a shell command and return the output"""
-
-    return subprocess.Popen(command, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE).communicate()[0].strip()
 
 
 def comma_str_to_list(str_list):

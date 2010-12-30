@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import json
 import logging
 import re
+import subprocess
 
 from . import util
 from . import zookeeper
@@ -193,7 +194,8 @@ class Application(PersistentNode):
         logging.getLogger().debug('Running command: %s', command)
 
         try:
-            result = util.run_command(command)
+            p = subprocess.Popen(command, shell=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+            result = p.communicate()[0].strip()
 
         except TypeError:
             logging.getLogger().warn('Command is not runnable: %s', command)

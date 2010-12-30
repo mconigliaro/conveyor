@@ -1,10 +1,6 @@
 import conveyor
 
 
-def test_run_command():
-    assert conveyor.util.run_command('/bin/echo test') == 'test'
-
-
 def test_comma_str_to_list():
     assert conveyor.util.comma_str_to_list('a,b,c') == ['a', 'b', 'c']
 
