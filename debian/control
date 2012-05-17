@@ -1,0 +1,13 @@
+Source: conveyor
+Section: python
+Priority: optional
+Maintainer: Dave Barr <dave.barr@gmail.com>
+Build-Depends: debhelper (>= 7), python-support, python-zookeeper, python (>=2.4)
+Standards-Version: 3.8.3
+Homepage: https://github.com/mconigliaro/conveyor
+
+Package: conveyor
+Architecture: all
+Depends: ${misc:Depends}, ${python:Depends}
+Description: A simple continuous deployment framework
+ A simple continuous deployment framework built on top of Apache Zookeeper

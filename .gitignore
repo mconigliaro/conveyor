@@ -1,6 +1,9 @@
 *.egg-info
 *.pyc
 distribute-*
+debian/conveyor
+debian/conveyor.*
+debian/files
 /build
 /dist
 /sandbox
